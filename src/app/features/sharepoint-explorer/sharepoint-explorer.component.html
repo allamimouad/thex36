@@ -1,0 +1,94 @@
+<div class="explorer" cdkDropListGroup>
+  <div class="toolbar">
+    <span class="toolbar-label">Current path:</span>
+    @for (segment of breadcrumb(); track segment.id; let isLast = $last) {
+      <span class="crumb">{{ segment.name }}</span>
+      @if (!isLast) {
+        <span class="crumb-sep">/</span>
+      }
+    }
+  </div>
+
+  <div class="panes">
+    <aside class="left-pane">
+      <p-tree [value]="treeNodes()">
+        <ng-template pTemplate="default" let-node>
+          <div
+            class="folder-drop-slot"
+            cdkDropList
+            [cdkDropListData]="node.data"
+            [style.margin-inline-start.px]="(node.data.level ?? 0) * 18"
+            [cdkDropListEnterPredicate]="canEnterFolder"
+            [class.drop-active]="activeDropFolderId() === node.data.id"
+            (cdkDropListEntered)="onDropListEntered($event)"
+            (cdkDropListExited)="onDropListExited($event)"
+            (cdkDropListDropped)="onDropOnFolder($event, node.data)"
+          >
+            <div
+              class="folder-row"
+              cdkDrag
+              [cdkDragData]="node.data"
+              [class.selected]="selectedFolderId() === node.data.id"
+              (click)="onFolderSelect(node.data.id)"
+            >
+              <span class="folder-icon" aria-hidden="true">📁</span>
+              <span class="folder-label">{{ node.label }}</span>
+
+              <ng-template cdkDragPreview>
+                <div class="drag-preview">
+                  <span aria-hidden="true">📁</span>
+                  <span>{{ node.label }}</span>
+                </div>
+              </ng-template>
+            </div>
+          </div>
+        </ng-template>
+      </p-tree>
+    </aside>
+
+    <section
+      class="right-pane"
+      cdkDropList
+      [cdkDropListData]="selectedFolder()"
+      [cdkDropListEnterPredicate]="canEnterCurrentFolder"
+      [class.drop-active]="activeDropFolderId() === selectedFolderId()"
+      (cdkDropListEntered)="onDropListEntered($event)"
+      (cdkDropListExited)="onDropListExited($event)"
+      (cdkDropListDropped)="selectedFolder() && onDropOnFolder($event, selectedFolder()!)"
+    >
+      <p-table [value]="selectedItems()" [tableStyle]="{ width: '100%' }">
+        <ng-template pTemplate="header">
+          <tr>
+            <th>Name</th>
+            <th class="size-col">Size</th>
+            <th class="modified-col">Modified</th>
+          </tr>
+        </ng-template>
+
+        <ng-template pTemplate="body" let-item>
+          <tr
+            cdkDrag
+            [cdkDragData]="item.kind === 'folder' ? item.folder : item.file"
+            [class.folder-table-row]="item.kind === 'folder'"
+            (dblclick)="item.kind === 'folder' && onOpenFolder(item.folder.id)"
+          >
+            <td>
+              <div class="file-cell">
+                <span class="file-icon" aria-hidden="true">{{ item.kind === 'folder' ? '📁' : '📄' }}</span>
+                <span class="file-label">{{ item.kind === 'folder' ? item.folder.name : item.file.name }}</span>
+              </div>
+              <ng-template cdkDragPreview>
+                <div class="drag-preview">
+                  <span aria-hidden="true">{{ item.kind === 'folder' ? '📁' : '📄' }}</span>
+                  <span>{{ item.kind === 'folder' ? item.folder.name : item.file.name }}</span>
+                </div>
+              </ng-template>
+            </td>
+            <td>{{ item.kind === 'folder' ? '—' : formatSize(item.file.size) }}</td>
+            <td>{{ item.kind === 'folder' ? '—' : item.file.modifiedAt }}</td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </section>
+  </div>
+</div>
