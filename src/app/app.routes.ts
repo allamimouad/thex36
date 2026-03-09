@@ -1,9 +1,9 @@
 import { Routes } from '@angular/router';
-import { SharepointExplorerComponent } from './features/sharepoint-explorer/sharepoint-explorer.component';
+import { TabsFeaturesComponent } from './features/tabs-features/tabs-features.component';
 
 export const routes: Routes = [
   {
     path: '',
-    component: SharepointExplorerComponent,
+    component: TabsFeaturesComponent,
   },
 ];
