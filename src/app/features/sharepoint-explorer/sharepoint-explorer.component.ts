@@ -29,6 +29,24 @@ export class SharepointExplorerComponent {
 
   readonly allFolders = toSignal(this.explorerService.watchFolders(), { initialValue: [] as FolderNode[] });
   readonly rootFolders = toSignal(this.explorerService.getRootFolders(), { initialValue: [] as FolderNode[] });
+  readonly rootFolder = computed<FolderNode | null>(() => {
+    const rootFolders = this.rootFolders();
+    if (rootFolders.length === 0) {
+      return null;
+    }
+
+    const rootFolderUrl = this.getParentFolderUrl(rootFolders[0].serverRelativeUrl);
+    if (!rootFolderUrl) {
+      return null;
+    }
+
+    return {
+      isFolder: true,
+      name: '/',
+      serverRelativeUrl: rootFolderUrl,
+      level: 0,
+    };
+  });
   readonly selectedFolderUrl = signal<string>('');
   readonly activeDropFolderUrl = signal<string | null>(null);
   readonly expandedFolderUrls = signal<Set<string>>(new Set<string>());
@@ -36,9 +54,27 @@ export class SharepointExplorerComponent {
   readonly isOperating = computed(() => this.pendingOperations() > 0);
 
   readonly treeNodes = computed<TreeNode<FolderNode>[]>(() => {
-    return this.rootFolders().map((rootFolder) =>
-      this.toTreeNode(rootFolder, 0, this.expandedFolderUrls(), this.allFolders()),
-    );
+    const rootFolder = this.rootFolder();
+    if (!rootFolder) {
+      return [];
+    }
+
+    const expandedFolderUrls = this.expandedFolderUrls();
+    const childFolders = this.rootFolders();
+    const isExpanded = expandedFolderUrls.has(rootFolder.serverRelativeUrl);
+
+    return [
+      {
+        key: rootFolder.serverRelativeUrl,
+        label: rootFolder.name,
+        data: rootFolder,
+        expanded: isExpanded,
+        leaf: false,
+        children: isExpanded
+          ? childFolders.map((childFolder) => this.toTreeNode(childFolder, 1, expandedFolderUrls, this.allFolders()))
+          : [],
+      },
+    ];
   });
   readonly selectedItems = toSignal(
     toObservable(this.selectedFolderUrl).pipe(
@@ -50,12 +86,27 @@ export class SharepointExplorerComponent {
   );
   readonly breadcrumb = toSignal(
     toObservable(this.selectedFolderUrl).pipe(
-      switchMap((folderUrl) => (folderUrl ? this.explorerService.getFolderPath(folderUrl) : of([] as FolderNode[]))),
+      switchMap((folderUrl) => {
+        const rootFolder = this.rootFolder();
+        if (!folderUrl || !rootFolder) {
+          return of([] as FolderNode[]);
+        }
+
+        if (folderUrl === rootFolder.serverRelativeUrl) {
+          return of([rootFolder]);
+        }
+
+        return this.explorerService
+          .getFolderPath(folderUrl)
+          .pipe(switchMap((path) => of([rootFolder, ...path])));
+      }),
     ),
     { initialValue: [] as FolderNode[] },
   );
   readonly selectedFolder = computed(
-    () => this.allFolders().find((folder) => folder.serverRelativeUrl === this.selectedFolderUrl()) ?? null,
+    () =>
+      this.allFolders().find((folder) => folder.serverRelativeUrl === this.selectedFolderUrl()) ??
+      (this.selectedFolderUrl() === this.rootFolder()?.serverRelativeUrl ? this.rootFolder() : null),
   );
 
   constructor() {
@@ -65,12 +116,13 @@ export class SharepointExplorerComponent {
       .subscribe();
 
     effect(() => {
-      const rootFolders = this.rootFolders();
-      if (rootFolders.length === 0 || this.selectedFolderUrl()) {
+      const rootFolder = this.rootFolder();
+      if (!rootFolder || this.selectedFolderUrl()) {
         return;
       }
 
-      this.selectedFolderUrl.set(rootFolders[0].serverRelativeUrl);
+      this.selectedFolderUrl.set(rootFolder.serverRelativeUrl);
+      this.expandedFolderUrls.set(new Set([rootFolder.serverRelativeUrl]));
     });
   }
 
@@ -97,6 +149,10 @@ export class SharepointExplorerComponent {
     }
 
     this.expandedFolderUrls.update((current) => new Set(current).add(folder.serverRelativeUrl));
+    if (folder.serverRelativeUrl === this.rootFolder()?.serverRelativeUrl) {
+      return;
+    }
+
     this.explorerService
       .loadFoldersOf(folder.serverRelativeUrl)
       .pipe(takeUntilDestroyed(this.destroyRef))
