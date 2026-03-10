@@ -70,10 +70,7 @@ export class SharepointExplorerComponent {
         return;
       }
 
-      const rootFolderUrl = rootFolders[0].serverRelativeUrl;
-      this.selectedFolderUrl.set(rootFolderUrl);
-      this.expandedFolderUrls.set(new Set([rootFolderUrl]));
-      this.explorerService.loadFoldersOf(rootFolderUrl).pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+      this.selectedFolderUrl.set(rootFolders[0].serverRelativeUrl);
     });
   }
 

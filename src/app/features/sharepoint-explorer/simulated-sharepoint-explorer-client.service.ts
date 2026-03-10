@@ -58,7 +58,9 @@ export class SimulatedSharepointExplorerClientService implements SharepointExplo
 
   getRootFolders(): Observable<FolderNode[]> {
     return this.foldersSubject.pipe(
-      map((folders) => folders.filter((folder) => folder.serverRelativeUrl === this.explorerRootUrl)),
+      map((folders) =>
+        folders.filter((folder) => this.getParentFolderUrl(folder.serverRelativeUrl) === this.explorerRootUrl),
+      ),
     );
   }
 
