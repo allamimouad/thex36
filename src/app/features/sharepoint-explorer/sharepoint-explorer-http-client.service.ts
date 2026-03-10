@@ -12,15 +12,18 @@ export class SharepointExplorerHttpClientService implements SharepointExplorerCl
   // CHANGE THIS: point to your real backend base path.
   private readonly baseUrl = '/api/sharepoint-explorer';
 
+  // This client stays stateless. Tree synchronization is handled by SharepointExplorerService,
+  // which reloads the source/destination branches after move operations complete.
   getRootFolders(): Observable<FolderNode[]> {
-    // CHANGE THIS: endpoint for the initial root folder collection.
+    // CHANGE THIS: endpoint that returns the initial root-level folders.
     return this.http
       .get<FolderDto[]>(`${this.baseUrl}/folders/root`)
       .pipe(map((folders) => folders.map((folder) => this.mapFolder(folder))));
   }
 
   getFolderByServerRelativeUrl(folderUrl: string): Observable<FolderNode | null> {
-    // CHANGE THIS: adapt query param / route param style to your API.
+    // CHANGE THIS: remove this method from the contract if your backend does not support it and you do not need it.
+    // CHANGE THIS: adapt route params / query params to your API contract.
     return this.http
       .get<FolderDto | null>(`${this.baseUrl}/folders/by-url`, {
         params: { folderUrl },
@@ -29,7 +32,7 @@ export class SharepointExplorerHttpClientService implements SharepointExplorerCl
   }
 
   getFoldersOf(folderUrl: string): Observable<FolderNode[]> {
-    // CHANGE THIS: endpoint for child folders of a given folder.
+    // CHANGE THIS: endpoint that returns only the direct child folders of the given folder.
     return this.http
       .get<FolderDto[]>(`${this.baseUrl}/folders/children`, {
         params: { folderUrl },
@@ -38,7 +41,7 @@ export class SharepointExplorerHttpClientService implements SharepointExplorerCl
   }
 
   getFilesOf(folderUrl: string): Observable<FileItem[]> {
-    // CHANGE THIS: endpoint for files inside a given folder.
+    // CHANGE THIS: endpoint that returns only the files inside the given folder.
     return this.http
       .get<FileDto[]>(`${this.baseUrl}/files`, {
         params: { folderUrl },
@@ -47,7 +50,7 @@ export class SharepointExplorerHttpClientService implements SharepointExplorerCl
   }
 
   getFolderPath(folderUrl: string): Observable<FolderNode[]> {
-    // CHANGE THIS: preferred if your backend can return the breadcrumb directly.
+    // CHANGE THIS: preferred if your backend can return the breadcrumb/path directly.
     return this.http
       .get<FolderDto[]>(`${this.baseUrl}/folders/path`, {
         params: { folderUrl },
