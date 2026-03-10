@@ -7,6 +7,7 @@ import { FileItem, FolderNode } from './sharepoint-explorer.models';
 @Injectable({ providedIn: 'root' })
 export class SimulatedSharepointExplorerClientService implements SharepointExplorerClient {
   private readonly simulatedLatencyMs = 400;
+  private readonly explorerRootUrl = '/sites/thex36';
 
   private readonly foldersSubject = new BehaviorSubject<FolderNode[]>([
     { isFolder: true, name: 'Root', serverRelativeUrl: '/sites/thex36' },
@@ -55,12 +56,49 @@ export class SimulatedSharepointExplorerClientService implements SharepointExplo
     },
   ]);
 
-  watchFolders(): Observable<FolderNode[]> {
-    return this.foldersSubject.asObservable();
+  getRootFolders(): Observable<FolderNode[]> {
+    return this.foldersSubject.pipe(
+      map((folders) => folders.filter((folder) => folder.serverRelativeUrl === this.explorerRootUrl)),
+    );
   }
 
-  watchFiles(): Observable<FileItem[]> {
-    return this.filesSubject.asObservable();
+  getFolderByServerRelativeUrl(folderUrl: string): Observable<FolderNode | null> {
+    return this.foldersSubject.pipe(
+      map((folders) => folders.find((folder) => folder.serverRelativeUrl === folderUrl) ?? null),
+    );
+  }
+
+  getFoldersOf(folderUrl: string): Observable<FolderNode[]> {
+    return this.foldersSubject.pipe(
+      map((folders) =>
+        folders.filter((folder) => this.getParentFolderUrl(folder.serverRelativeUrl) === folderUrl),
+      ),
+    );
+  }
+
+  getFilesOf(folderUrl: string): Observable<FileItem[]> {
+    return this.filesSubject.pipe(
+      map((files) => files.filter((file) => this.getParentFolderUrl(file.serverRelativeUrl) === folderUrl)),
+    );
+  }
+
+  getFolderPath(folderUrl: string): Observable<FolderNode[]> {
+    return this.foldersSubject.pipe(
+      map((folders) => {
+        const path: FolderNode[] = [];
+        let current = folders.find((folder) => folder.serverRelativeUrl === folderUrl) ?? null;
+
+        while (current) {
+          path.unshift(current);
+          const parentFolderUrl = this.getParentFolderUrl(current.serverRelativeUrl);
+          current = parentFolderUrl
+            ? (folders.find((folder) => folder.serverRelativeUrl === parentFolderUrl) ?? null)
+            : null;
+        }
+
+        return path;
+      }),
+    );
   }
 
   moveFileTo(fileServerRelativeUrl: string, destinationFolderUrl: string): Observable<void> {
@@ -122,6 +160,16 @@ export class SimulatedSharepointExplorerClientService implements SharepointExplo
 
   private getItemName(serverRelativeUrl: string): string {
     return serverRelativeUrl.slice(serverRelativeUrl.lastIndexOf('/') + 1);
+  }
+
+  private getParentFolderUrl(serverRelativeUrl: string): string | null {
+    const lastSlashIndex = serverRelativeUrl.lastIndexOf('/');
+    if (lastSlashIndex <= 0) {
+      return null;
+    }
+
+    const parentFolderUrl = serverRelativeUrl.slice(0, lastSlashIndex);
+    return parentFolderUrl.length > 0 ? parentFolderUrl : null;
   }
 
   private buildChildUrl(parentFolderUrl: string, childName: string): string {

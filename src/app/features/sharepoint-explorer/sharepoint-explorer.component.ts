@@ -1,5 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
-import { toObservable, toSignal } from '@angular/core/rxjs-interop';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
+import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import {
   CdkDrag,
   CdkDragDrop,
@@ -24,10 +24,11 @@ import { SharepointExplorerService } from './sharepoint-explorer.service';
   styleUrl: './sharepoint-explorer.component.scss',
 })
 export class SharepointExplorerComponent {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly explorerService = inject(SharepointExplorerService);
 
   readonly allFolders = toSignal(this.explorerService.watchFolders(), { initialValue: [] as FolderNode[] });
-  readonly rootFolder = toSignal(this.explorerService.getRootFolder(), { initialValue: null });
+  readonly rootFolders = toSignal(this.explorerService.getRootFolders(), { initialValue: [] as FolderNode[] });
   readonly selectedFolderUrl = signal<string>('');
   readonly activeDropFolderUrl = signal<string | null>(null);
   readonly expandedFolderUrls = signal<Set<string>>(new Set<string>());
@@ -35,12 +36,9 @@ export class SharepointExplorerComponent {
   readonly isOperating = computed(() => this.pendingOperations() > 0);
 
   readonly treeNodes = computed<TreeNode<FolderNode>[]>(() => {
-    const rootFolder = this.rootFolder();
-    if (!rootFolder) {
-      return [];
-    }
-
-    return [this.toTreeNode(rootFolder, 0, this.expandedFolderUrls(), this.allFolders())];
+    return this.rootFolders().map((rootFolder) =>
+      this.toTreeNode(rootFolder, 0, this.expandedFolderUrls(), this.allFolders()),
+    );
   });
   readonly selectedItems = toSignal(
     toObservable(this.selectedFolderUrl).pipe(
@@ -61,14 +59,21 @@ export class SharepointExplorerComponent {
   );
 
   constructor() {
+    this.explorerService
+      .loadRootFolders()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe();
+
     effect(() => {
-      const rootFolder = this.rootFolder();
-      if (!rootFolder || this.selectedFolderUrl()) {
+      const rootFolders = this.rootFolders();
+      if (rootFolders.length === 0 || this.selectedFolderUrl()) {
         return;
       }
 
-      this.selectedFolderUrl.set(rootFolder.serverRelativeUrl);
-      this.expandedFolderUrls.set(new Set([rootFolder.serverRelativeUrl]));
+      const rootFolderUrl = rootFolders[0].serverRelativeUrl;
+      this.selectedFolderUrl.set(rootFolderUrl);
+      this.expandedFolderUrls.set(new Set([rootFolderUrl]));
+      this.explorerService.loadFoldersOf(rootFolderUrl).pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
     });
   }
 
@@ -95,6 +100,10 @@ export class SharepointExplorerComponent {
     }
 
     this.expandedFolderUrls.update((current) => new Set(current).add(folder.serverRelativeUrl));
+    this.explorerService
+      .loadFoldersOf(folder.serverRelativeUrl)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe();
   }
 
   onTreeNodeCollapse(event: { node: TreeNode<FolderNode> }): void {
@@ -223,13 +232,14 @@ export class SharepointExplorerComponent {
       (childFolder) => this.getParentFolderUrl(childFolder.serverRelativeUrl) === folder.serverRelativeUrl,
     );
     const isExpanded = expandedFolderUrls.has(folder.serverRelativeUrl);
+    const isLoaded = this.explorerService.isFolderLoaded(folder.serverRelativeUrl);
 
     return {
       key: folder.serverRelativeUrl,
       label: folder.name,
       data: { ...folder, level },
       expanded: isExpanded,
-      leaf: childFolders.length === 0,
+      leaf: isLoaded && childFolders.length === 0,
       children: isExpanded
         ? childFolders.map((childFolder) => this.toTreeNode(childFolder, level + 1, expandedFolderUrls, allFolders))
         : [],

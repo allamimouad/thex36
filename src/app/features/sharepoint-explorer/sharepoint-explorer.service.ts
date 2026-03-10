@@ -1,28 +1,25 @@
 import { inject, Injectable } from '@angular/core';
-import { Observable, combineLatest, map } from 'rxjs';
+import { BehaviorSubject, Observable, combineLatest, forkJoin, map, of, switchMap, take, tap } from 'rxjs';
 
 import { SharepointExplorerClient } from './sharepoint-explorer.client';
-import { ExplorerRow, FileItem, FolderNode } from './sharepoint-explorer.models';
+import { ExplorerRow, FolderNode } from './sharepoint-explorer.models';
 
 @Injectable({ providedIn: 'root' })
 export class SharepointExplorerService {
   private readonly client = inject(SharepointExplorerClient);
 
+  private readonly foldersSubject = new BehaviorSubject<FolderNode[]>([]);
+  private readonly refreshSubject = new BehaviorSubject(0);
+  private readonly loadedParents = new Set<string | null>();
+  private readonly rootFolderUrls = new Set<string>();
+
   watchFolders(): Observable<FolderNode[]> {
-    return this.client.watchFolders();
+    return this.foldersSubject.asObservable();
   }
 
-  getRootFolder(): Observable<FolderNode | null> {
+  getRootFolders(): Observable<FolderNode[]> {
     return this.watchFolders().pipe(
-      map((folders) => {
-        if (folders.length === 0) {
-          return null;
-        }
-
-        return folders.reduce((root, folder) =>
-          folder.serverRelativeUrl.length < root.serverRelativeUrl.length ? folder : root,
-        );
-      }),
+      map((folders) => folders.filter((folder) => this.rootFolderUrls.has(folder.serverRelativeUrl))),
     );
   }
 
@@ -41,41 +38,155 @@ export class SharepointExplorerService {
   }
 
   getFolderContentOf(folderUrl: string): Observable<ExplorerRow[]> {
-    return combineLatest([this.getFoldersOf(folderUrl), this.client.watchFiles()]).pipe(
+    return this.refreshSubject.pipe(
+      switchMap(() =>
+        combineLatest([
+          this.client.getFoldersOf(folderUrl).pipe(take(1)),
+          this.client.getFilesOf(folderUrl).pipe(take(1)),
+        ]),
+      ),
       map(([folders, files]) => [
         ...folders.map((folder) => ({ kind: 'folder' as const, folder })),
-        ...files
-          .filter((file) => this.getParentFolderUrl(file.serverRelativeUrl) === folderUrl)
-          .map((file) => ({ kind: 'file' as const, file })),
+        ...files.map((file) => ({ kind: 'file' as const, file })),
       ]),
     );
   }
 
   getFolderPath(folderUrl: string): Observable<FolderNode[]> {
-    return this.watchFolders().pipe(
-      map((folders) => {
-        const path: FolderNode[] = [];
-        let current = folders.find((folder) => folder.serverRelativeUrl === folderUrl) ?? null;
+    return this.refreshSubject.pipe(switchMap(() => this.client.getFolderPath(folderUrl).pipe(take(1))));
+  }
 
-        while (current) {
-          path.unshift(current);
-          const parentFolderUrl = this.getParentFolderUrl(current.serverRelativeUrl);
-          current = parentFolderUrl
-            ? (folders.find((folder) => folder.serverRelativeUrl === parentFolderUrl) ?? null)
-            : null;
-        }
+  loadRootFolders(): Observable<FolderNode[]> {
+    if (this.loadedParents.has(null)) {
+      return this.getRootFolders().pipe(take(1));
+    }
 
-        return path;
+    return this.client.getRootFolders().pipe(
+      take(1),
+      tap((rootFolders) => {
+        this.loadedParents.add(null);
+        this.rootFolderUrls.clear();
+        rootFolders.forEach((folder) => this.rootFolderUrls.add(folder.serverRelativeUrl));
+        this.replaceChildren(null, rootFolders);
+      }),
+    );
+  }
+
+  loadFoldersOf(folderUrl: string, forceRefresh = false): Observable<FolderNode[]> {
+    if (!forceRefresh && this.loadedParents.has(folderUrl)) {
+      return this.getFoldersOf(folderUrl).pipe(take(1));
+    }
+
+    return this.client.getFoldersOf(folderUrl).pipe(
+      take(1),
+      tap((folders) => {
+        this.loadedParents.add(folderUrl);
+        this.replaceChildren(folderUrl, folders);
       }),
     );
   }
 
   moveFileTo(fileServerRelativeUrl: string, destinationFolderUrl: string): Observable<void> {
-    return this.client.moveFileTo(fileServerRelativeUrl, destinationFolderUrl);
+    const sourceFolderUrl = this.getParentFolderUrl(fileServerRelativeUrl);
+
+    return this.client.moveFileTo(fileServerRelativeUrl, destinationFolderUrl).pipe(
+      switchMap(() => this.reloadAfterMove(sourceFolderUrl, destinationFolderUrl)),
+    );
   }
 
   moveFolderTo(folderServerRelativeUrl: string, destinationFolderUrl: string): Observable<void> {
-    return this.client.moveFolderTo(folderServerRelativeUrl, destinationFolderUrl);
+    const sourceFolderUrl = this.getParentFolderUrl(folderServerRelativeUrl);
+
+    return this.client.moveFolderTo(folderServerRelativeUrl, destinationFolderUrl).pipe(
+      switchMap(() => this.reloadAfterMove(sourceFolderUrl, destinationFolderUrl)),
+    );
+  }
+
+  isFolderLoaded(folderUrl: string | null): boolean {
+    return this.loadedParents.has(folderUrl);
+  }
+
+  private reloadAfterMove(sourceFolderUrl: string | null, destinationFolderUrl: string): Observable<void> {
+    const reloads: Observable<unknown>[] = [];
+
+    if (sourceFolderUrl === null) {
+      reloads.push(this.loadRootFoldersForce());
+    } else if (this.loadedParents.has(sourceFolderUrl)) {
+      reloads.push(this.loadFoldersOf(sourceFolderUrl, true));
+    }
+
+    if (this.loadedParents.has(destinationFolderUrl)) {
+      reloads.push(this.loadFoldersOf(destinationFolderUrl, true));
+    }
+
+    if (reloads.length === 0) {
+      this.refreshSubject.next(this.refreshSubject.value + 1);
+      return of(void 0);
+    }
+
+    return forkJoin(reloads).pipe(
+      tap(() => this.refreshSubject.next(this.refreshSubject.value + 1)),
+      map(() => void 0),
+    );
+  }
+
+  private loadRootFoldersForce(): Observable<FolderNode[]> {
+    this.loadedParents.delete(null);
+    return this.loadRootFolders();
+  }
+
+  private replaceChildren(parentFolderUrl: string | null, nextChildren: FolderNode[]): void {
+    const currentFolders = this.foldersSubject.getValue();
+    const currentChildren = currentFolders.filter(
+      (folder) => this.getParentFolderUrl(folder.serverRelativeUrl) === parentFolderUrl,
+    );
+
+    const removedChildUrls = currentChildren
+      .filter(
+        (currentChild) =>
+          !nextChildren.some((nextChild) => nextChild.serverRelativeUrl === currentChild.serverRelativeUrl),
+      )
+      .map((folder) => folder.serverRelativeUrl);
+
+    const remainingFolders = currentFolders.filter(
+      (folder) =>
+        this.getParentFolderUrl(folder.serverRelativeUrl) !== parentFolderUrl &&
+        !removedChildUrls.some((removedUrl) => this.isSameOrDescendant(folder.serverRelativeUrl, removedUrl)),
+    );
+
+    removedChildUrls.forEach((folderUrl) => this.clearLoadedBranch(folderUrl));
+
+    const nextFolders = [...remainingFolders];
+    nextChildren.forEach((folder) => {
+      const existingIndex = nextFolders.findIndex(
+        (existingFolder) => existingFolder.serverRelativeUrl === folder.serverRelativeUrl,
+      );
+
+      if (existingIndex >= 0) {
+        nextFolders[existingIndex] = folder;
+        return;
+      }
+
+      nextFolders.push(folder);
+    });
+
+    this.foldersSubject.next(nextFolders);
+  }
+
+  private clearLoadedBranch(folderUrl: string): void {
+    const branchUrls = this.foldersSubject
+      .getValue()
+      .filter((folder) => this.isSameOrDescendant(folder.serverRelativeUrl, folderUrl))
+      .map((folder) => folder.serverRelativeUrl);
+
+    branchUrls.forEach((url) => {
+      this.loadedParents.delete(url);
+      this.rootFolderUrls.delete(url);
+    });
+  }
+
+  private isSameOrDescendant(candidateUrl: string, ancestorUrl: string): boolean {
+    return candidateUrl === ancestorUrl || candidateUrl.startsWith(`${ancestorUrl}/`);
   }
 
   private getParentFolderUrl(serverRelativeUrl: string): string | null {
