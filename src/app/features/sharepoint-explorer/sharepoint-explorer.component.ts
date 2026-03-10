@@ -196,9 +196,10 @@ export class SharepointExplorerComponent {
       return;
     }
 
+    const destinationServerRelativeUrl = this.buildDestinationUrl(targetFolder.serverRelativeUrl, file.name);
     this.pendingOperations.update((count) => count + 1);
     this.explorerService
-      .moveFileTo(file.serverRelativeUrl, targetFolder.serverRelativeUrl)
+      .moveFileTo(file.serverRelativeUrl, destinationServerRelativeUrl)
       .pipe(finalize(() => this.pendingOperations.update((count) => Math.max(0, count - 1))))
       .subscribe();
   }
@@ -208,15 +209,20 @@ export class SharepointExplorerComponent {
       return;
     }
 
+    const destinationServerRelativeUrl = this.buildDestinationUrl(targetFolder.serverRelativeUrl, folder.name);
     this.pendingOperations.update((count) => count + 1);
     this.explorerService
-      .moveFolderTo(folder.serverRelativeUrl, targetFolder.serverRelativeUrl)
+      .moveFolderTo(folder.serverRelativeUrl, destinationServerRelativeUrl)
       .pipe(finalize(() => this.pendingOperations.update((count) => Math.max(0, count - 1))))
       .subscribe();
   }
 
   private selectFolder(folderUrl: string): void {
     this.selectedFolderUrl.set(folderUrl);
+  }
+
+  private buildDestinationUrl(parentFolderUrl: string, itemName: string): string {
+    return `${parentFolderUrl}/${itemName}`;
   }
 
   private toTreeNode(

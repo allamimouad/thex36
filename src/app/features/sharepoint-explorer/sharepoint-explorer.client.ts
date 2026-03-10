@@ -8,6 +8,6 @@ export abstract class SharepointExplorerClient {
   abstract getFoldersOf(folderUrl: string): Observable<FolderNode[]>;
   abstract getFilesOf(folderUrl: string): Observable<FileItem[]>;
   abstract getFolderPath(folderUrl: string): Observable<FolderNode[]>;
-  abstract moveFileTo(fileServerRelativeUrl: string, destinationFolderUrl: string): Observable<void>;
-  abstract moveFolderTo(folderServerRelativeUrl: string, destinationFolderUrl: string): Observable<void>;
+  abstract moveFileTo(fileServerRelativeUrl: string, destinationServerRelativeUrl: string): Observable<void>;
+  abstract moveFolderTo(folderServerRelativeUrl: string, destinationServerRelativeUrl: string): Observable<void>;
 }

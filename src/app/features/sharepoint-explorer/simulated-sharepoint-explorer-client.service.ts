@@ -103,14 +103,14 @@ export class SimulatedSharepointExplorerClientService implements SharepointExplo
     );
   }
 
-  moveFileTo(fileServerRelativeUrl: string, destinationFolderUrl: string): Observable<void> {
+  moveFileTo(fileServerRelativeUrl: string, destinationServerRelativeUrl: string): Observable<void> {
     return timer(this.simulatedLatencyMs).pipe(
       tap(() => {
         const files = this.filesSubject.getValue().map((item) =>
           item.serverRelativeUrl === fileServerRelativeUrl
             ? {
                 ...item,
-                serverRelativeUrl: `${destinationFolderUrl}/${item.name}`,
+                serverRelativeUrl: destinationServerRelativeUrl,
               }
             : item,
         );
@@ -121,13 +121,9 @@ export class SimulatedSharepointExplorerClientService implements SharepointExplo
     );
   }
 
-  moveFolderTo(folderServerRelativeUrl: string, destinationFolderUrl: string): Observable<void> {
+  moveFolderTo(folderServerRelativeUrl: string, destinationServerRelativeUrl: string): Observable<void> {
     return timer(this.simulatedLatencyMs).pipe(
       tap(() => {
-        const nextFolderUrl = this.buildChildUrl(
-          destinationFolderUrl,
-          this.getItemName(folderServerRelativeUrl),
-        );
         const folders = this.foldersSubject.getValue().map((folder) => {
           if (
             folder.serverRelativeUrl === folderServerRelativeUrl ||
@@ -135,7 +131,10 @@ export class SimulatedSharepointExplorerClientService implements SharepointExplo
           ) {
             return {
               ...folder,
-              serverRelativeUrl: folder.serverRelativeUrl.replace(folderServerRelativeUrl, nextFolderUrl),
+              serverRelativeUrl: folder.serverRelativeUrl.replace(
+                folderServerRelativeUrl,
+                destinationServerRelativeUrl,
+              ),
             };
           }
 
@@ -146,7 +145,10 @@ export class SimulatedSharepointExplorerClientService implements SharepointExplo
           if (file.serverRelativeUrl.startsWith(`${folderServerRelativeUrl}/`)) {
             return {
               ...file,
-              serverRelativeUrl: file.serverRelativeUrl.replace(folderServerRelativeUrl, nextFolderUrl),
+              serverRelativeUrl: file.serverRelativeUrl.replace(
+                folderServerRelativeUrl,
+                destinationServerRelativeUrl,
+              ),
             };
           }
 
@@ -174,7 +176,4 @@ export class SimulatedSharepointExplorerClientService implements SharepointExplo
     return parentFolderUrl.length > 0 ? parentFolderUrl : null;
   }
 
-  private buildChildUrl(parentFolderUrl: string, childName: string): string {
-    return `${parentFolderUrl}/${childName}`;
-  }
 }

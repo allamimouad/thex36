@@ -86,18 +86,28 @@ export class SharepointExplorerService {
     );
   }
 
-  moveFileTo(fileServerRelativeUrl: string, destinationFolderUrl: string): Observable<void> {
+  moveFileTo(fileServerRelativeUrl: string, destinationServerRelativeUrl: string): Observable<void> {
     const sourceFolderUrl = this.getParentFolderUrl(fileServerRelativeUrl);
+    const destinationFolderUrl = this.getParentFolderUrl(destinationServerRelativeUrl);
 
-    return this.client.moveFileTo(fileServerRelativeUrl, destinationFolderUrl).pipe(
+    if (!destinationFolderUrl) {
+      return of(void 0);
+    }
+
+    return this.client.moveFileTo(fileServerRelativeUrl, destinationServerRelativeUrl).pipe(
       switchMap(() => this.reloadAfterMove(sourceFolderUrl, destinationFolderUrl)),
     );
   }
 
-  moveFolderTo(folderServerRelativeUrl: string, destinationFolderUrl: string): Observable<void> {
+  moveFolderTo(folderServerRelativeUrl: string, destinationServerRelativeUrl: string): Observable<void> {
     const sourceFolderUrl = this.getParentFolderUrl(folderServerRelativeUrl);
+    const destinationFolderUrl = this.getParentFolderUrl(destinationServerRelativeUrl);
 
-    return this.client.moveFolderTo(folderServerRelativeUrl, destinationFolderUrl).pipe(
+    if (!destinationFolderUrl) {
+      return of(void 0);
+    }
+
+    return this.client.moveFolderTo(folderServerRelativeUrl, destinationServerRelativeUrl).pipe(
       switchMap(() => this.reloadAfterMove(sourceFolderUrl, destinationFolderUrl)),
     );
   }

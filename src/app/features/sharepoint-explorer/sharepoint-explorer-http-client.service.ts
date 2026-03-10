@@ -58,19 +58,21 @@ export class SharepointExplorerHttpClientService implements SharepointExplorerCl
       .pipe(map((folders) => folders.map((folder) => this.mapFolder(folder))));
   }
 
-  moveFileTo(fileServerRelativeUrl: string, destinationFolderUrl: string): Observable<void> {
+  moveFileTo(fileServerRelativeUrl: string, destinationServerRelativeUrl: string): Observable<void> {
+    // CHANGE THIS: destinationServerRelativeUrl is the full final URL including the file name.
     // CHANGE THIS: adapt payload names if your backend expects different fields.
     return this.http.post<void>(`${this.baseUrl}/files/move`, {
       fileServerRelativeUrl,
-      destinationFolderUrl,
+      destinationServerRelativeUrl,
     });
   }
 
-  moveFolderTo(folderServerRelativeUrl: string, destinationFolderUrl: string): Observable<void> {
+  moveFolderTo(folderServerRelativeUrl: string, destinationServerRelativeUrl: string): Observable<void> {
+    // CHANGE THIS: destinationServerRelativeUrl is the full final URL including the folder name.
     // CHANGE THIS: adapt payload names if your backend expects different fields.
     return this.http.post<void>(`${this.baseUrl}/folders/move`, {
       folderServerRelativeUrl,
-      destinationFolderUrl,
+      destinationServerRelativeUrl,
     });
   }
 
