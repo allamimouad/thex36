@@ -11,17 +11,16 @@
 
   <div class="panes">
     <aside class="left-pane">
-      <p-tree [value]="treeNodes()">
+      <p-tree [value]="treeNodes()" (onNodeExpand)="onTreeNodeExpand($event)" (onNodeCollapse)="onTreeNodeCollapse($event)">
         <ng-template pTemplate="default" let-node>
           <div
             class="folder-drop-slot"
             cdkDropList
             [cdkDropListData]="node.data"
-            [style.margin-inline-start.px]="(node.data.level ?? 0) * 18"
             [cdkDropListEnterPredicate]="canEnterFolder"
             [class.drop-active]="activeDropFolderId() === node.data.id"
             (cdkDropListEntered)="onDropListEntered($event)"
-            (cdkDropListExited)="onDropListExited($event)"
+            (cdkDropListExited)="onDropListExited()"
             (cdkDropListDropped)="onDropOnFolder($event, node.data)"
           >
             <div
@@ -53,7 +52,7 @@
       [cdkDropListEnterPredicate]="canEnterCurrentFolder"
       [class.drop-active]="activeDropFolderId() === selectedFolderId()"
       (cdkDropListEntered)="onDropListEntered($event)"
-      (cdkDropListExited)="onDropListExited($event)"
+      (cdkDropListExited)="onDropListExited()"
       (cdkDropListDropped)="selectedFolder() && onDropOnFolder($event, selectedFolder()!)"
     >
       <p-table [value]="selectedItems()" [tableStyle]="{ width: '100%' }">

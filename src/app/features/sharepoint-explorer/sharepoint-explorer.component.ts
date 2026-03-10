@@ -1,9 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import {
   CdkDrag,
   CdkDragDrop,
   CdkDragEnter,
-  CdkDragExit,
   CdkDragPreview,
   CdkDropList,
   DragDropModule,
@@ -11,36 +11,9 @@ import {
 import { TableModule } from 'primeng/table';
 import { TreeModule } from 'primeng/tree';
 import { TreeNode } from 'primeng/api';
-
-export interface FolderNode {
-  id: string;
-  name: string;
-  parentId: string | null;
-  level?: number;
-  children?: FolderNode[];
-}
-
-export interface FileItem {
-  id: string;
-  name: string;
-  size: number;
-  modifiedAt: string;
-  folderId: string;
-}
-
-type ExplorerRow =
-  | { kind: 'folder'; folder: FolderNode }
-  | { kind: 'file'; file: FileItem };
-
-class ExplorerApiService {
-  apiMoveFile(fileId: string, targetFolderId: string): void {
-    console.log('apiMoveFile', { fileId, targetFolderId });
-  }
-
-  apiMoveFolder(folderId: string, targetFolderId: string): void {
-    console.log('apiMoveFolder', { folderId, targetFolderId });
-  }
-}
+import { of, switchMap } from 'rxjs';
+import { ExplorerRow, FileItem, FolderNode } from './sharepoint-explorer.models';
+import { SharepointExplorerService } from './sharepoint-explorer.service';
 
 @Component({
   selector: 'app-sharepoint-explorer',
@@ -51,71 +24,86 @@ class ExplorerApiService {
   styleUrl: './sharepoint-explorer.component.scss',
 })
 export class SharepointExplorerComponent {
-  private readonly api = new ExplorerApiService();
+  private readonly explorerService = inject(SharepointExplorerService);
 
-  private readonly initialFolders: FolderNode[] = [
-    { id: 'root', name: 'Root', parentId: null },
-    { id: 'docs', name: 'Documents', parentId: 'root' },
-    { id: 'images', name: 'Images', parentId: 'root' },
-    { id: 'projects', name: 'Projects', parentId: 'docs' },
-    { id: 'archive', name: 'Archive', parentId: 'docs' },
-    { id: 'mockups', name: 'Mockups', parentId: 'images' },
-  ];
-
-  private readonly initialFiles: FileItem[] = [
-    { id: 'f1', name: 'requirements.docx', size: 45682, modifiedAt: '2026-03-01', folderId: 'docs' },
-    { id: 'f2', name: 'q1-report.xlsx', size: 128812, modifiedAt: '2026-02-24', folderId: 'docs' },
-    { id: 'f3', name: 'hero-banner.png', size: 845321, modifiedAt: '2026-02-18', folderId: 'images' },
-    { id: 'f4', name: 'mobile-wireframe.fig', size: 2251880, modifiedAt: '2026-03-04', folderId: 'mockups' },
-    { id: 'f5', name: 'roadmap.md', size: 8120, modifiedAt: '2026-03-05', folderId: 'projects' },
-  ];
-
-  readonly flatFolders = signal<FolderNode[]>(this.initialFolders);
-  readonly files = signal<FileItem[]>(this.initialFiles);
-  readonly selectedFolderId = signal<string>(this.initialFolders[0]?.id ?? '');
+  readonly allFolders = toSignal(this.explorerService.watchFolders(), { initialValue: [] as FolderNode[] });
+  readonly rootFolder = toSignal(this.explorerService.getRootFolder(), { initialValue: null });
+  readonly selectedFolderId = signal<string>('');
   readonly activeDropFolderId = signal<string | null>(null);
+  readonly expandedFolderIds = signal<Set<string>>(new Set<string>());
 
-  readonly folderMap = computed(() => {
-    const map = new Map<string, FolderNode>();
-    for (const folder of this.flatFolders()) {
-      map.set(folder.id, folder);
+  readonly treeNodes = computed<TreeNode<FolderNode>[]>(() => {
+    const rootFolder = this.rootFolder();
+    if (!rootFolder) {
+      return [];
     }
-    return map;
-  });
 
-  readonly folderTree = computed(() => this.computeFolderTree(this.flatFolders()));
-  readonly treeNodes = computed<TreeNode<FolderNode>[]>(() => this.toPrimeTreeNodes(this.folderTree()));
-
-  readonly selectedFiles = computed(() => {
-    const folderId = this.selectedFolderId();
-    return this.files().filter((file) => file.folderId === folderId);
+    return [this.toTreeNode(rootFolder, 0, this.expandedFolderIds(), this.allFolders())];
   });
-  readonly selectedChildFolders = computed(() => {
-    const folderId = this.selectedFolderId();
-    return this.flatFolders().filter((folder) => folder.parentId === folderId);
-  });
-  readonly selectedItems = computed<ExplorerRow[]>(() => [
-    ...this.selectedChildFolders().map((folder) => ({ kind: 'folder' as const, folder })),
-    ...this.selectedFiles().map((file) => ({ kind: 'file' as const, file })),
-  ]);
+  readonly selectedItems = toSignal(
+    toObservable(this.selectedFolderId).pipe(
+      switchMap((folderId) => (folderId ? this.explorerService.getFolderContentOf(folderId) : of([] as ExplorerRow[]))),
+    ),
+    { initialValue: [] as ExplorerRow[] },
+  );
+  readonly breadcrumb = toSignal(
+    toObservable(this.selectedFolderId).pipe(
+      switchMap((folderId) => (folderId ? this.explorerService.getFolderPath(folderId) : of([] as FolderNode[]))),
+    ),
+    { initialValue: [] as FolderNode[] },
+  );
+  readonly selectedFolder = computed(
+    () => this.allFolders().find((folder) => folder.id === this.selectedFolderId()) ?? null,
+  );
 
-  readonly breadcrumb = computed(() => this.getFolderPath(this.selectedFolderId()));
-  readonly selectedFolder = computed(() => this.folderMap().get(this.selectedFolderId()) ?? null);
+  constructor() {
+    effect(() => {
+      const rootFolder = this.rootFolder();
+      if (!rootFolder || this.selectedFolderId()) {
+        return;
+      }
+
+      this.selectedFolderId.set(rootFolder.id);
+      this.expandedFolderIds.set(new Set([rootFolder.id]));
+    });
+  }
 
   onFolderSelect(folderId: string): void {
-    this.selectedFolderId.set(folderId);
+    this.selectFolder(folderId);
   }
 
   onOpenFolder(folderId: string): void {
-    this.selectedFolderId.set(folderId);
+    this.selectFolder(folderId);
   }
 
   onDropListEntered(event: CdkDragEnter<FolderNode | null, FolderNode | null>): void {
     this.activeDropFolderId.set(event.container.data?.id ?? null);
   }
 
-  onDropListExited(_event: CdkDragExit<FolderNode | null, FolderNode | null>): void {
+  onDropListExited(): void {
     this.activeDropFolderId.set(null);
+  }
+
+  onTreeNodeExpand(event: { node: TreeNode<FolderNode> }): void {
+    const folder = event.node.data;
+    if (!folder) {
+      return;
+    }
+
+    this.expandedFolderIds.update((current) => new Set(current).add(folder.id));
+  }
+
+  onTreeNodeCollapse(event: { node: TreeNode<FolderNode> }): void {
+    const folder = event.node.data;
+    if (!folder) {
+      return;
+    }
+
+    this.expandedFolderIds.update((current) => {
+      const next = new Set(current);
+      next.delete(folder.id);
+      return next;
+    });
   }
 
   onDropOnFolder(
@@ -126,65 +114,24 @@ export class SharepointExplorerComponent {
     const dragged = event.item.data;
 
     if (this.isFileItem(dragged)) {
-      if (dragged.folderId === targetFolder.id) {
-        return;
-      }
-      this.files.update((items) =>
-        items.map((item) => (item.id === dragged.id ? { ...item, folderId: targetFolder.id } : item)),
-      );
-      this.api.apiMoveFile(dragged.id, targetFolder.id);
+      this.moveFile(dragged, targetFolder);
       return;
     }
 
     if (this.isFolderNode(dragged)) {
-      if (!this.isValidFolderMove(dragged, targetFolder)) {
-        return;
-      }
-      this.flatFolders.update((items) =>
-        items.map((folder) => (folder.id === dragged.id ? { ...folder, parentId: targetFolder.id } : folder)),
-      );
-      this.api.apiMoveFolder(dragged.id, targetFolder.id);
+      this.moveFolder(dragged, targetFolder);
     }
   }
 
   canEnterFolder = (drag: CdkDrag<FileItem | FolderNode>, drop: CdkDropList<FolderNode>): boolean => {
-    const targetFolder = drop.data;
-    const dragged = drag.data;
-
-    if (!targetFolder) {
-      return false;
-    }
-
-    if (this.isFileItem(dragged)) {
-      return dragged.folderId !== targetFolder.id;
-    }
-
-    if (this.isFolderNode(dragged)) {
-      return this.isValidFolderMove(dragged, targetFolder);
-    }
-
-    return false;
+    return this.canDropIntoFolder(drag.data, drop.data);
   };
 
   canEnterCurrentFolder = (
     drag: CdkDrag<FileItem | FolderNode>,
     _drop: CdkDropList<FolderNode | null>,
   ): boolean => {
-    const targetFolder = this.selectedFolder();
-    if (!targetFolder) {
-      return false;
-    }
-
-    const dragged = drag.data;
-    if (this.isFileItem(dragged)) {
-      return dragged.folderId !== targetFolder.id;
-    }
-
-    if (this.isFolderNode(dragged)) {
-      return this.isValidFolderMove(dragged, targetFolder);
-    }
-
-    return false;
+    return this.canDropIntoFolder(drag.data, this.selectedFolder());
   };
 
   private isValidFolderMove(source: FolderNode, target: FolderNode): boolean {
@@ -198,67 +145,73 @@ export class SharepointExplorerComponent {
   }
 
   private isDescendant(candidateId: string, ancestorId: string): boolean {
-    const map = this.folderMap();
-    let current = map.get(candidateId) ?? null;
+    let current = this.allFolders().find((folder) => folder.id === candidateId) ?? null;
 
     while (current?.parentId) {
       if (current.parentId === ancestorId) {
         return true;
       }
-      current = map.get(current.parentId) ?? null;
+      current = this.allFolders().find((folder) => folder.id === current?.parentId) ?? null;
     }
+
     return false;
   }
 
-  private computeFolderTree(flatFolders: FolderNode[]): FolderNode[] {
-    const map = new Map<string, FolderNode>();
-    const roots: FolderNode[] = [];
-
-    for (const folder of flatFolders) {
-      map.set(folder.id, { ...folder, children: [] });
+  private canDropIntoFolder(dragged: FileItem | FolderNode, targetFolder: FolderNode | null): boolean {
+    if (!targetFolder) {
+      return false;
     }
 
-    for (const folder of flatFolders) {
-      const node = map.get(folder.id);
-      if (!node) {
-        continue;
-      }
-      if (folder.parentId && map.has(folder.parentId)) {
-        map.get(folder.parentId)?.children?.push(node);
-      } else {
-        roots.push(node);
-      }
+    if (this.isFileItem(dragged)) {
+      return dragged.folderId !== targetFolder.id;
     }
 
-    return roots;
+    if (this.isFolderNode(dragged)) {
+      return this.isValidFolderMove(dragged, targetFolder);
+    }
+
+    return false;
   }
 
-  private toPrimeTreeNodes(nodes: FolderNode[], level = 0): TreeNode<FolderNode>[] {
-    return nodes.map((folder) => ({
+  private moveFile(file: FileItem, targetFolder: FolderNode): void {
+    if (file.folderId === targetFolder.id) {
+      return;
+    }
+
+    this.explorerService.moveFileTo(file.id, targetFolder.id).subscribe();
+  }
+
+  private moveFolder(folder: FolderNode, targetFolder: FolderNode): void {
+    if (!this.isValidFolderMove(folder, targetFolder)) {
+      return;
+    }
+
+    this.explorerService.moveFolderTo(folder.id, targetFolder.id).subscribe();
+  }
+
+  private selectFolder(folderId: string): void {
+    this.selectedFolderId.set(folderId);
+  }
+
+  private toTreeNode(
+    folder: FolderNode,
+    level: number,
+    expandedFolderIds: Set<string>,
+    allFolders: FolderNode[],
+  ): TreeNode<FolderNode> {
+    const childFolders = allFolders.filter((childFolder) => childFolder.parentId === folder.id);
+    const isExpanded = expandedFolderIds.has(folder.id);
+
+    return {
       key: folder.id,
       label: folder.name,
-      data: {
-        id: folder.id,
-        name: folder.name,
-        parentId: folder.parentId,
-        level,
-      },
-      expanded: true,
-      children: this.toPrimeTreeNodes(folder.children ?? [], level + 1),
-    }));
-  }
-
-  private getFolderPath(folderId: string): FolderNode[] {
-    const map = this.folderMap();
-    const path: FolderNode[] = [];
-    let current = map.get(folderId) ?? null;
-
-    while (current) {
-      path.unshift(current);
-      current = current.parentId ? (map.get(current.parentId) ?? null) : null;
-    }
-
-    return path;
+      data: { ...folder, level },
+      expanded: isExpanded,
+      leaf: childFolders.length === 0,
+      children: isExpanded
+        ? childFolders.map((childFolder) => this.toTreeNode(childFolder, level + 1, expandedFolderIds, allFolders))
+        : [],
+    };
   }
 
   private isFileItem(value: unknown): value is FileItem {
