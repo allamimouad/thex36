@@ -26,6 +26,10 @@
   text-overflow: ellipsis;
 }
 
+.toolbar-spacer {
+  flex: 1;
+}
+
 .toolbar-label {
   color: #4b5563;
   font-weight: 600;
@@ -37,6 +41,23 @@
 
 .crumb-sep {
   color: #6b7280;
+}
+
+.operation-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #375a7f;
+  font-weight: 600;
+}
+
+.operation-spinner {
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 2px solid #bfdbfe;
+  border-top-color: #2563eb;
+  border-radius: 999px;
+  animation: explorer-spin 0.7s linear infinite;
 }
 
 .panes {
@@ -159,4 +180,10 @@
   border-radius: 6px;
   background: #ffffff;
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+}
+
+@keyframes explorer-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

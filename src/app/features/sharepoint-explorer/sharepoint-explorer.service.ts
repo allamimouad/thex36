@@ -1,10 +1,11 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, combineLatest, map, of } from 'rxjs';
+import { BehaviorSubject, Observable, combineLatest, map, tap, timer } from 'rxjs';
 
 import { ExplorerRow, FileItem, FolderNode } from './sharepoint-explorer.models';
 
 @Injectable({ providedIn: 'root' })
 export class SharepointExplorerService {
+  private readonly simulatedLatencyMs = 400;
   private readonly foldersSubject = new BehaviorSubject<FolderNode[]>([
     { id: 'root', name: 'Root', parentId: null },
     { id: 'docs', name: 'Documents', parentId: 'root' },
@@ -67,20 +68,28 @@ export class SharepointExplorerService {
   }
 
   moveFileTo(fileId: string, folderId: string): Observable<void> {
-    const files = this.filesSubject
-      .getValue()
-      .map((item) => (item.id === fileId ? { ...item, folderId } : item));
+    return timer(this.simulatedLatencyMs).pipe(
+      tap(() => {
+        const files = this.filesSubject
+          .getValue()
+          .map((item) => (item.id === fileId ? { ...item, folderId } : item));
 
-    this.filesSubject.next(files);
-    return of(void 0);
+        this.filesSubject.next(files);
+      }),
+      map(() => void 0),
+    );
   }
 
   moveFolderTo(folderId: string, destinationFolderId: string): Observable<void> {
-    const folders = this.foldersSubject
-      .getValue()
-      .map((folder) => (folder.id === folderId ? { ...folder, parentId: destinationFolderId } : folder));
+    return timer(this.simulatedLatencyMs).pipe(
+      tap(() => {
+        const folders = this.foldersSubject
+          .getValue()
+          .map((folder) => (folder.id === folderId ? { ...folder, parentId: destinationFolderId } : folder));
 
-    this.foldersSubject.next(folders);
-    return of(void 0);
+        this.foldersSubject.next(folders);
+      }),
+      map(() => void 0),
+    );
   }
 }

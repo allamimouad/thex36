@@ -11,7 +11,7 @@ import {
 import { TableModule } from 'primeng/table';
 import { TreeModule } from 'primeng/tree';
 import { TreeNode } from 'primeng/api';
-import { of, switchMap } from 'rxjs';
+import { finalize, of, switchMap } from 'rxjs';
 import { ExplorerRow, FileItem, FolderNode } from './sharepoint-explorer.models';
 import { SharepointExplorerService } from './sharepoint-explorer.service';
 
@@ -31,6 +31,8 @@ export class SharepointExplorerComponent {
   readonly selectedFolderId = signal<string>('');
   readonly activeDropFolderId = signal<string | null>(null);
   readonly expandedFolderIds = signal<Set<string>>(new Set<string>());
+  readonly pendingOperations = signal(0);
+  readonly isOperating = computed(() => this.pendingOperations() > 0);
 
   readonly treeNodes = computed<TreeNode<FolderNode>[]>(() => {
     const rootFolder = this.rootFolder();
@@ -158,7 +160,7 @@ export class SharepointExplorerComponent {
   }
 
   private canDropIntoFolder(dragged: FileItem | FolderNode, targetFolder: FolderNode | null): boolean {
-    if (!targetFolder) {
+    if (!targetFolder || this.isOperating()) {
       return false;
     }
 
@@ -178,7 +180,11 @@ export class SharepointExplorerComponent {
       return;
     }
 
-    this.explorerService.moveFileTo(file.id, targetFolder.id).subscribe();
+    this.pendingOperations.update((count) => count + 1);
+    this.explorerService
+      .moveFileTo(file.id, targetFolder.id)
+      .pipe(finalize(() => this.pendingOperations.update((count) => Math.max(0, count - 1))))
+      .subscribe();
   }
 
   private moveFolder(folder: FolderNode, targetFolder: FolderNode): void {
@@ -186,7 +192,11 @@ export class SharepointExplorerComponent {
       return;
     }
 
-    this.explorerService.moveFolderTo(folder.id, targetFolder.id).subscribe();
+    this.pendingOperations.update((count) => count + 1);
+    this.explorerService
+      .moveFolderTo(folder.id, targetFolder.id)
+      .pipe(finalize(() => this.pendingOperations.update((count) => Math.max(0, count - 1))))
+      .subscribe();
   }
 
   private selectFolder(folderId: string): void {

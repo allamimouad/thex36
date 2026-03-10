@@ -7,6 +7,13 @@
         <span class="crumb-sep">/</span>
       }
     }
+    <span class="toolbar-spacer"></span>
+    @if (isOperating()) {
+      <span class="operation-status" aria-live="polite">
+        <span class="operation-spinner" aria-hidden="true"></span>
+        <span>Updating...</span>
+      </span>
+    }
   </div>
 
   <div class="panes">
