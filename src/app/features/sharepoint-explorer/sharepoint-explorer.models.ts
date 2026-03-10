@@ -1,17 +1,17 @@
 export interface FolderNode {
-  id: string;
+  isFolder: true;
   name: string;
-  parentId: string | null;
+  serverRelativeUrl: string;
   level?: number;
   children?: FolderNode[];
 }
 
 export interface FileItem {
-  id: string;
+  isFolder: false;
   name: string;
+  serverRelativeUrl: string;
   size: number;
   modifiedAt: string;
-  folderId: string;
 }
 
 export type ExplorerRow =

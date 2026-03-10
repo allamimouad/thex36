@@ -1,65 +1,68 @@
-import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, combineLatest, map, tap, timer } from 'rxjs';
+import { inject, Injectable } from '@angular/core';
+import { Observable, combineLatest, map } from 'rxjs';
 
+import { SharepointExplorerClient } from './sharepoint-explorer.client';
 import { ExplorerRow, FileItem, FolderNode } from './sharepoint-explorer.models';
 
 @Injectable({ providedIn: 'root' })
 export class SharepointExplorerService {
-  private readonly simulatedLatencyMs = 400;
-  private readonly foldersSubject = new BehaviorSubject<FolderNode[]>([
-    { id: 'root', name: 'Root', parentId: null },
-    { id: 'docs', name: 'Documents', parentId: 'root' },
-    { id: 'images', name: 'Images', parentId: 'root' },
-    { id: 'projects', name: 'Projects', parentId: 'docs' },
-    { id: 'archive', name: 'Archive', parentId: 'docs' },
-    { id: 'mockups', name: 'Mockups', parentId: 'images' },
-  ]);
-
-  private readonly filesSubject = new BehaviorSubject<FileItem[]>([
-    { id: 'f1', name: 'requirements.docx', size: 45682, modifiedAt: '2026-03-01', folderId: 'docs' },
-    { id: 'f2', name: 'q1-report.xlsx', size: 128812, modifiedAt: '2026-02-24', folderId: 'docs' },
-    { id: 'f3', name: 'hero-banner.png', size: 845321, modifiedAt: '2026-02-18', folderId: 'images' },
-    { id: 'f4', name: 'mobile-wireframe.fig', size: 2251880, modifiedAt: '2026-03-04', folderId: 'mockups' },
-    { id: 'f5', name: 'roadmap.md', size: 8120, modifiedAt: '2026-03-05', folderId: 'projects' },
-  ]);
+  private readonly client = inject(SharepointExplorerClient);
 
   watchFolders(): Observable<FolderNode[]> {
-    return this.foldersSubject.asObservable();
+    return this.client.watchFolders();
   }
 
   getRootFolder(): Observable<FolderNode | null> {
-    return this.watchFolders().pipe(map((folders) => folders.find((folder) => folder.parentId === null) ?? null));
+    return this.watchFolders().pipe(
+      map((folders) => {
+        if (folders.length === 0) {
+          return null;
+        }
+
+        return folders.reduce((root, folder) =>
+          folder.serverRelativeUrl.length < root.serverRelativeUrl.length ? folder : root,
+        );
+      }),
+    );
   }
 
-  getFolderById(folderId: string): Observable<FolderNode | null> {
-    return this.watchFolders().pipe(map((folders) => folders.find((folder) => folder.id === folderId) ?? null));
+  getFolderByServerRelativeUrl(folderUrl: string): Observable<FolderNode | null> {
+    return this.watchFolders().pipe(
+      map((folders) => folders.find((folder) => folder.serverRelativeUrl === folderUrl) ?? null),
+    );
   }
 
-  getFoldersOf(folderId: string): Observable<FolderNode[]> {
-    return this.watchFolders().pipe(map((folders) => folders.filter((folder) => folder.parentId === folderId)));
+  getFoldersOf(folderUrl: string): Observable<FolderNode[]> {
+    return this.watchFolders().pipe(
+      map((folders) =>
+        folders.filter((folder) => this.getParentFolderUrl(folder.serverRelativeUrl) === folderUrl),
+      ),
+    );
   }
 
-  getFolderContentOf(folderId: string): Observable<ExplorerRow[]> {
-    return combineLatest([this.getFoldersOf(folderId), this.filesSubject.asObservable()]).pipe(
+  getFolderContentOf(folderUrl: string): Observable<ExplorerRow[]> {
+    return combineLatest([this.getFoldersOf(folderUrl), this.client.watchFiles()]).pipe(
       map(([folders, files]) => [
         ...folders.map((folder) => ({ kind: 'folder' as const, folder })),
         ...files
-          .filter((file) => file.folderId === folderId)
+          .filter((file) => this.getParentFolderUrl(file.serverRelativeUrl) === folderUrl)
           .map((file) => ({ kind: 'file' as const, file })),
       ]),
     );
   }
 
-  getFolderPath(folderId: string): Observable<FolderNode[]> {
+  getFolderPath(folderUrl: string): Observable<FolderNode[]> {
     return this.watchFolders().pipe(
       map((folders) => {
         const path: FolderNode[] = [];
-        let current = folders.find((folder) => folder.id === folderId) ?? null;
+        let current = folders.find((folder) => folder.serverRelativeUrl === folderUrl) ?? null;
 
         while (current) {
           path.unshift(current);
-          const parentId = current.parentId;
-          current = parentId ? (folders.find((folder) => folder.id === parentId) ?? null) : null;
+          const parentFolderUrl = this.getParentFolderUrl(current.serverRelativeUrl);
+          current = parentFolderUrl
+            ? (folders.find((folder) => folder.serverRelativeUrl === parentFolderUrl) ?? null)
+            : null;
         }
 
         return path;
@@ -67,29 +70,21 @@ export class SharepointExplorerService {
     );
   }
 
-  moveFileTo(fileId: string, folderId: string): Observable<void> {
-    return timer(this.simulatedLatencyMs).pipe(
-      tap(() => {
-        const files = this.filesSubject
-          .getValue()
-          .map((item) => (item.id === fileId ? { ...item, folderId } : item));
-
-        this.filesSubject.next(files);
-      }),
-      map(() => void 0),
-    );
+  moveFileTo(fileServerRelativeUrl: string, destinationFolderUrl: string): Observable<void> {
+    return this.client.moveFileTo(fileServerRelativeUrl, destinationFolderUrl);
   }
 
-  moveFolderTo(folderId: string, destinationFolderId: string): Observable<void> {
-    return timer(this.simulatedLatencyMs).pipe(
-      tap(() => {
-        const folders = this.foldersSubject
-          .getValue()
-          .map((folder) => (folder.id === folderId ? { ...folder, parentId: destinationFolderId } : folder));
+  moveFolderTo(folderServerRelativeUrl: string, destinationFolderUrl: string): Observable<void> {
+    return this.client.moveFolderTo(folderServerRelativeUrl, destinationFolderUrl);
+  }
 
-        this.foldersSubject.next(folders);
-      }),
-      map(() => void 0),
-    );
+  private getParentFolderUrl(serverRelativeUrl: string): string | null {
+    const lastSlashIndex = serverRelativeUrl.lastIndexOf('/');
+    if (lastSlashIndex <= 0) {
+      return null;
+    }
+
+    const parentFolderUrl = serverRelativeUrl.slice(0, lastSlashIndex);
+    return parentFolderUrl.length > 0 ? parentFolderUrl : null;
   }
 }

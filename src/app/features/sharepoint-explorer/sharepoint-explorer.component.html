@@ -1,7 +1,7 @@
 <div class="explorer" cdkDropListGroup>
   <div class="toolbar">
     <span class="toolbar-label">Current path:</span>
-    @for (segment of breadcrumb(); track segment.id; let isLast = $last) {
+    @for (segment of breadcrumb(); track segment.serverRelativeUrl; let isLast = $last) {
       <span class="crumb">{{ segment.name }}</span>
       @if (!isLast) {
         <span class="crumb-sep">/</span>
@@ -25,7 +25,7 @@
             cdkDropList
             [cdkDropListData]="node.data"
             [cdkDropListEnterPredicate]="canEnterFolder"
-            [class.drop-active]="activeDropFolderId() === node.data.id"
+            [class.drop-active]="activeDropFolderUrl() === node.data.serverRelativeUrl"
             (cdkDropListEntered)="onDropListEntered($event)"
             (cdkDropListExited)="onDropListExited()"
             (cdkDropListDropped)="onDropOnFolder($event, node.data)"
@@ -34,8 +34,8 @@
               class="folder-row"
               cdkDrag
               [cdkDragData]="node.data"
-              [class.selected]="selectedFolderId() === node.data.id"
-              (click)="onFolderSelect(node.data.id)"
+              [class.selected]="selectedFolderUrl() === node.data.serverRelativeUrl"
+              (click)="onFolderSelect(node.data.serverRelativeUrl)"
             >
               <span class="folder-icon" aria-hidden="true">📁</span>
               <span class="folder-label">{{ node.label }}</span>
@@ -57,7 +57,7 @@
       cdkDropList
       [cdkDropListData]="selectedFolder()"
       [cdkDropListEnterPredicate]="canEnterCurrentFolder"
-      [class.drop-active]="activeDropFolderId() === selectedFolderId()"
+      [class.drop-active]="activeDropFolderUrl() === selectedFolderUrl()"
       (cdkDropListEntered)="onDropListEntered($event)"
       (cdkDropListExited)="onDropListExited()"
       (cdkDropListDropped)="selectedFolder() && onDropOnFolder($event, selectedFolder()!)"
@@ -76,7 +76,7 @@
             cdkDrag
             [cdkDragData]="item.kind === 'folder' ? item.folder : item.file"
             [class.folder-table-row]="item.kind === 'folder'"
-            (dblclick)="item.kind === 'folder' && onOpenFolder(item.folder.id)"
+            (dblclick)="item.kind === 'folder' && onOpenFolder(item.folder.serverRelativeUrl)"
           >
             <td>
               <div class="file-cell">

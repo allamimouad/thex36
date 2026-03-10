@@ -28,9 +28,9 @@ export class SharepointExplorerComponent {
 
   readonly allFolders = toSignal(this.explorerService.watchFolders(), { initialValue: [] as FolderNode[] });
   readonly rootFolder = toSignal(this.explorerService.getRootFolder(), { initialValue: null });
-  readonly selectedFolderId = signal<string>('');
-  readonly activeDropFolderId = signal<string | null>(null);
-  readonly expandedFolderIds = signal<Set<string>>(new Set<string>());
+  readonly selectedFolderUrl = signal<string>('');
+  readonly activeDropFolderUrl = signal<string | null>(null);
+  readonly expandedFolderUrls = signal<Set<string>>(new Set<string>());
   readonly pendingOperations = signal(0);
   readonly isOperating = computed(() => this.pendingOperations() > 0);
 
@@ -40,50 +40,52 @@ export class SharepointExplorerComponent {
       return [];
     }
 
-    return [this.toTreeNode(rootFolder, 0, this.expandedFolderIds(), this.allFolders())];
+    return [this.toTreeNode(rootFolder, 0, this.expandedFolderUrls(), this.allFolders())];
   });
   readonly selectedItems = toSignal(
-    toObservable(this.selectedFolderId).pipe(
-      switchMap((folderId) => (folderId ? this.explorerService.getFolderContentOf(folderId) : of([] as ExplorerRow[]))),
+    toObservable(this.selectedFolderUrl).pipe(
+      switchMap((folderUrl) =>
+        folderUrl ? this.explorerService.getFolderContentOf(folderUrl) : of([] as ExplorerRow[])
+      ),
     ),
     { initialValue: [] as ExplorerRow[] },
   );
   readonly breadcrumb = toSignal(
-    toObservable(this.selectedFolderId).pipe(
-      switchMap((folderId) => (folderId ? this.explorerService.getFolderPath(folderId) : of([] as FolderNode[]))),
+    toObservable(this.selectedFolderUrl).pipe(
+      switchMap((folderUrl) => (folderUrl ? this.explorerService.getFolderPath(folderUrl) : of([] as FolderNode[]))),
     ),
     { initialValue: [] as FolderNode[] },
   );
   readonly selectedFolder = computed(
-    () => this.allFolders().find((folder) => folder.id === this.selectedFolderId()) ?? null,
+    () => this.allFolders().find((folder) => folder.serverRelativeUrl === this.selectedFolderUrl()) ?? null,
   );
 
   constructor() {
     effect(() => {
       const rootFolder = this.rootFolder();
-      if (!rootFolder || this.selectedFolderId()) {
+      if (!rootFolder || this.selectedFolderUrl()) {
         return;
       }
 
-      this.selectedFolderId.set(rootFolder.id);
-      this.expandedFolderIds.set(new Set([rootFolder.id]));
+      this.selectedFolderUrl.set(rootFolder.serverRelativeUrl);
+      this.expandedFolderUrls.set(new Set([rootFolder.serverRelativeUrl]));
     });
   }
 
-  onFolderSelect(folderId: string): void {
-    this.selectFolder(folderId);
+  onFolderSelect(folderUrl: string): void {
+    this.selectFolder(folderUrl);
   }
 
-  onOpenFolder(folderId: string): void {
-    this.selectFolder(folderId);
+  onOpenFolder(folderUrl: string): void {
+    this.selectFolder(folderUrl);
   }
 
   onDropListEntered(event: CdkDragEnter<FolderNode | null, FolderNode | null>): void {
-    this.activeDropFolderId.set(event.container.data?.id ?? null);
+    this.activeDropFolderUrl.set(event.container.data?.serverRelativeUrl ?? null);
   }
 
   onDropListExited(): void {
-    this.activeDropFolderId.set(null);
+    this.activeDropFolderUrl.set(null);
   }
 
   onTreeNodeExpand(event: { node: TreeNode<FolderNode> }): void {
@@ -92,7 +94,7 @@ export class SharepointExplorerComponent {
       return;
     }
 
-    this.expandedFolderIds.update((current) => new Set(current).add(folder.id));
+    this.expandedFolderUrls.update((current) => new Set(current).add(folder.serverRelativeUrl));
   }
 
   onTreeNodeCollapse(event: { node: TreeNode<FolderNode> }): void {
@@ -101,9 +103,9 @@ export class SharepointExplorerComponent {
       return;
     }
 
-    this.expandedFolderIds.update((current) => {
+    this.expandedFolderUrls.update((current) => {
       const next = new Set(current);
-      next.delete(folder.id);
+      next.delete(folder.serverRelativeUrl);
       return next;
     });
   }
@@ -112,17 +114,15 @@ export class SharepointExplorerComponent {
     event: CdkDragDrop<FolderNode | null, unknown, FileItem | FolderNode>,
     targetFolder: FolderNode,
   ): void {
-    this.activeDropFolderId.set(null);
+    this.activeDropFolderUrl.set(null);
     const dragged = event.item.data;
 
-    if (this.isFileItem(dragged)) {
-      this.moveFile(dragged, targetFolder);
+    if (dragged.isFolder) {
+      this.moveFolder(dragged, targetFolder);
       return;
     }
 
-    if (this.isFolderNode(dragged)) {
-      this.moveFolder(dragged, targetFolder);
-    }
+    this.moveFile(dragged, targetFolder);
   }
 
   canEnterFolder = (drag: CdkDrag<FileItem | FolderNode>, drop: CdkDropList<FolderNode>): boolean => {
@@ -137,23 +137,27 @@ export class SharepointExplorerComponent {
   };
 
   private isValidFolderMove(source: FolderNode, target: FolderNode): boolean {
-    if (source.id === target.id) {
+    if (source.serverRelativeUrl === target.serverRelativeUrl) {
       return false;
     }
-    if (this.isDescendant(target.id, source.id)) {
+    if (this.isDescendant(target.serverRelativeUrl, source.serverRelativeUrl)) {
       return false;
     }
-    return source.parentId !== target.id;
+
+    return this.getParentFolderUrl(source.serverRelativeUrl) !== target.serverRelativeUrl;
   }
 
-  private isDescendant(candidateId: string, ancestorId: string): boolean {
-    let current = this.allFolders().find((folder) => folder.id === candidateId) ?? null;
+  private isDescendant(candidateUrl: string, ancestorUrl: string): boolean {
+    let current = this.allFolders().find((folder) => folder.serverRelativeUrl === candidateUrl) ?? null;
 
-    while (current?.parentId) {
-      if (current.parentId === ancestorId) {
+    while (current) {
+      const parentFolderUrl = this.getParentFolderUrl(current.serverRelativeUrl);
+      if (parentFolderUrl === ancestorUrl) {
         return true;
       }
-      current = this.allFolders().find((folder) => folder.id === current?.parentId) ?? null;
+      current = parentFolderUrl
+        ? (this.allFolders().find((folder) => folder.serverRelativeUrl === parentFolderUrl) ?? null)
+        : null;
     }
 
     return false;
@@ -164,25 +168,31 @@ export class SharepointExplorerComponent {
       return false;
     }
 
-    if (this.isFileItem(dragged)) {
-      return dragged.folderId !== targetFolder.id;
-    }
-
-    if (this.isFolderNode(dragged)) {
+    if (dragged.isFolder) {
       return this.isValidFolderMove(dragged, targetFolder);
     }
 
-    return false;
+    return this.getParentFolderUrl(dragged.serverRelativeUrl) !== targetFolder.serverRelativeUrl;
+  }
+
+  private getParentFolderUrl(serverRelativeUrl: string): string | null {
+    const lastSlashIndex = serverRelativeUrl.lastIndexOf('/');
+    if (lastSlashIndex <= 0) {
+      return null;
+    }
+
+    const parentFolderUrl = serverRelativeUrl.slice(0, lastSlashIndex);
+    return parentFolderUrl.length > 0 ? parentFolderUrl : null;
   }
 
   private moveFile(file: FileItem, targetFolder: FolderNode): void {
-    if (file.folderId === targetFolder.id) {
+    if (this.getParentFolderUrl(file.serverRelativeUrl) === targetFolder.serverRelativeUrl) {
       return;
     }
 
     this.pendingOperations.update((count) => count + 1);
     this.explorerService
-      .moveFileTo(file.id, targetFolder.id)
+      .moveFileTo(file.serverRelativeUrl, targetFolder.serverRelativeUrl)
       .pipe(finalize(() => this.pendingOperations.update((count) => Math.max(0, count - 1))))
       .subscribe();
   }
@@ -194,42 +204,36 @@ export class SharepointExplorerComponent {
 
     this.pendingOperations.update((count) => count + 1);
     this.explorerService
-      .moveFolderTo(folder.id, targetFolder.id)
+      .moveFolderTo(folder.serverRelativeUrl, targetFolder.serverRelativeUrl)
       .pipe(finalize(() => this.pendingOperations.update((count) => Math.max(0, count - 1))))
       .subscribe();
   }
 
-  private selectFolder(folderId: string): void {
-    this.selectedFolderId.set(folderId);
+  private selectFolder(folderUrl: string): void {
+    this.selectedFolderUrl.set(folderUrl);
   }
 
   private toTreeNode(
     folder: FolderNode,
     level: number,
-    expandedFolderIds: Set<string>,
+    expandedFolderUrls: Set<string>,
     allFolders: FolderNode[],
   ): TreeNode<FolderNode> {
-    const childFolders = allFolders.filter((childFolder) => childFolder.parentId === folder.id);
-    const isExpanded = expandedFolderIds.has(folder.id);
+    const childFolders = allFolders.filter(
+      (childFolder) => this.getParentFolderUrl(childFolder.serverRelativeUrl) === folder.serverRelativeUrl,
+    );
+    const isExpanded = expandedFolderUrls.has(folder.serverRelativeUrl);
 
     return {
-      key: folder.id,
+      key: folder.serverRelativeUrl,
       label: folder.name,
       data: { ...folder, level },
       expanded: isExpanded,
       leaf: childFolders.length === 0,
       children: isExpanded
-        ? childFolders.map((childFolder) => this.toTreeNode(childFolder, level + 1, expandedFolderIds, allFolders))
+        ? childFolders.map((childFolder) => this.toTreeNode(childFolder, level + 1, expandedFolderUrls, allFolders))
         : [],
     };
-  }
-
-  private isFileItem(value: unknown): value is FileItem {
-    return !!value && typeof value === 'object' && 'folderId' in value && 'size' in value;
-  }
-
-  private isFolderNode(value: unknown): value is FolderNode {
-    return !!value && typeof value === 'object' && 'parentId' in value && 'name' in value;
   }
 
   formatSize(size: number): string {
