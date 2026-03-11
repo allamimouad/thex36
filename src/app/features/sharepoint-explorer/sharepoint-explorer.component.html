@@ -19,8 +19,8 @@
             class="folder-drop-slot"
             cdkDropList
             [cdkDropListData]="node.data"
+            [cdkDropListSortingDisabled]="true"
             [cdkDropListEnterPredicate]="canEnterFolder"
-            [class.drop-active]="activeDropFolderUrl() === node.data.serverRelativeUrl"
             (cdkDropListEntered)="onDropListEntered($event)"
             (cdkDropListExited)="onDropListExited()"
             (cdkDropListDropped)="onDropOnFolder($event, node.data)"
@@ -30,6 +30,7 @@
               cdkDrag
               [cdkDragData]="node.data"
               [class.selected]="selectedFolderUrl() === node.data.serverRelativeUrl"
+              [class.drop-active]="activeDropFolderUrl() === node.data.serverRelativeUrl"
               (click)="onFolderSelect(node.data.serverRelativeUrl)"
             >
               <span class="folder-icon" aria-hidden="true">📁</span>
@@ -41,6 +42,8 @@
                   <span>{{ node.label }}</span>
                 </div>
               </ng-template>
+              <ng-template cdkDragPlaceholder>
+              </ng-template>
             </div>
           </div>
         </ng-template>
@@ -51,6 +54,7 @@
       class="right-pane"
       cdkDropList
       [cdkDropListData]="selectedFolder()"
+      [cdkDropListSortingDisabled]="true"
       [cdkDropListEnterPredicate]="canEnterCurrentFolder"
       [class.drop-active]="activeDropFolderUrl() === selectedFolderUrl()"
       (cdkDropListEntered)="onDropListEntered($event)"
@@ -83,6 +87,8 @@
                   <span aria-hidden="true">{{ item.kind === 'folder' ? '📁' : '📄' }}</span>
                   <span>{{ item.kind === 'folder' ? item.folder.name : item.file.name }}</span>
                 </div>
+              </ng-template>
+              <ng-template cdkDragPlaceholder>
               </ng-template>
             </td>
             <td>{{ item.kind === 'folder' ? '—' : formatSize(item.file.size) }}</td>

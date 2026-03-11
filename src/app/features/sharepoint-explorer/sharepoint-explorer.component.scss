@@ -108,13 +108,6 @@
 .folder-drop-slot {
   display: block;
   width: 100%;
-  border-radius: 4px;
-  transition: background-color 120ms ease;
-}
-
-.folder-drop-slot.drop-active {
-  background: #dbeafe;
-  box-shadow: inset 0 0 0 1px #93c5fd;
 }
 
 .folder-row {
@@ -151,6 +144,11 @@
 .folder-row.selected {
   background: #e5e7eb;
   font-weight: 600;
+}
+
+.folder-row.drop-active {
+  background: #dbeafe;
+  box-shadow: inset 0 0 0 1px #93c5fd;
 }
 
 .file-cell {
