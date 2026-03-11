@@ -12,8 +12,11 @@ import { TableModule } from 'primeng/table';
 import { TreeModule } from 'primeng/tree';
 import { TreeNode } from 'primeng/api';
 import { finalize, of, switchMap } from 'rxjs';
-import { ExplorerRow, FileItem, FolderNode } from './sharepoint-explorer.models';
-import { SHAREPOINT_EXPLORER_ROOT_URL, SharepointExplorerService } from './sharepoint-explorer.service';
+import { ExplorerRow, FileItem, FolderNode } from './models/sharepoint-explorer.models';
+import {
+  SHAREPOINT_EXPLORER_ROOT_URL,
+  SharepointExplorerService,
+} from './services/sharepoint-explorer.service';
 
 @Component({
   selector: 'app-sharepoint-explorer',

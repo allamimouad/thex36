@@ -2,7 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, combineLatest, forkJoin, map, of, switchMap, take, tap } from 'rxjs';
 
 import { SharepointExplorerClient } from './sharepoint-explorer.client';
-import { ExplorerRow, FolderNode } from './sharepoint-explorer.models';
+import { ExplorerRow, FolderNode } from '../models/sharepoint-explorer.models';
 
 export const SHAREPOINT_EXPLORER_ROOT_URL = '/sites/XXX1/D1';
 

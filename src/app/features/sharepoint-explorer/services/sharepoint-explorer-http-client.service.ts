@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 
 import { SharepointExplorerClient } from './sharepoint-explorer.client';
-import { FileItem, FolderNode } from './sharepoint-explorer.models';
+import { FileItem, FolderNode } from '../models/sharepoint-explorer.models';
 
 @Injectable({ providedIn: 'root' })
 export class SharepointExplorerHttpClientService implements SharepointExplorerClient {

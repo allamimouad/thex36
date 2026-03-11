@@ -1,6 +1,6 @@
 import { Observable } from 'rxjs';
 
-import { FileItem, FolderNode } from './sharepoint-explorer.models';
+import { FileItem, FolderNode } from '../models/sharepoint-explorer.models';
 
 export abstract class SharepointExplorerClient {
   abstract getFolderByServerRelativeUrl(folderUrl: string): Observable<FolderNode | null>;

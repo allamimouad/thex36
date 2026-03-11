@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, map, tap, timer } from 'rxjs';
 
 import { SharepointExplorerClient } from './sharepoint-explorer.client';
-import { FileItem, FolderNode } from './sharepoint-explorer.models';
+import { FileItem, FolderNode } from '../models/sharepoint-explorer.models';
 
 @Injectable({ providedIn: 'root' })
 export class SimulatedSharepointExplorerClientService implements SharepointExplorerClient {
