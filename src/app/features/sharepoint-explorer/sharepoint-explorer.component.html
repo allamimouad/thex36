@@ -1,12 +1,7 @@
 <div class="explorer" cdkDropListGroup>
   <div class="toolbar">
     <span class="toolbar-label">Current path:</span>
-    @for (segment of breadcrumb(); track segment.serverRelativeUrl; let isLast = $last) {
-      <span class="crumb">{{ segment.name }}</span>
-      @if (!isLast) {
-        <span class="crumb-sep">/</span>
-      }
-    }
+    <span class="crumb">{{ breadcrumb() }}</span>
     <span class="toolbar-spacer"></span>
     @if (isOperating()) {
       <span class="operation-status" aria-live="polite">

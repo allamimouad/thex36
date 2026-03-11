@@ -14,13 +14,6 @@ export class SharepointExplorerHttpClientService implements SharepointExplorerCl
 
   // This client stays stateless. Tree synchronization is handled by SharepointExplorerService,
   // which reloads the source/destination branches after move operations complete.
-  getRootFolders(): Observable<FolderNode[]> {
-    // CHANGE THIS: endpoint that returns the initial root-level folders.
-    return this.http
-      .get<FolderDto[]>(`${this.baseUrl}/folders/root`)
-      .pipe(map((folders) => folders.map((folder) => this.mapFolder(folder))));
-  }
-
   getFolderByServerRelativeUrl(folderUrl: string): Observable<FolderNode | null> {
     // CHANGE THIS: remove this method from the contract if your backend does not support it and you do not need it.
     // CHANGE THIS: adapt route params / query params to your API contract.
@@ -47,15 +40,6 @@ export class SharepointExplorerHttpClientService implements SharepointExplorerCl
         params: { folderUrl },
       })
       .pipe(map((files) => files.map((file) => this.mapFile(file))));
-  }
-
-  getFolderPath(folderUrl: string): Observable<FolderNode[]> {
-    // CHANGE THIS: preferred if your backend can return the breadcrumb/path directly.
-    return this.http
-      .get<FolderDto[]>(`${this.baseUrl}/folders/path`, {
-        params: { folderUrl },
-      })
-      .pipe(map((folders) => folders.map((folder) => this.mapFolder(folder))));
   }
 
   moveFileTo(fileServerRelativeUrl: string, destinationServerRelativeUrl: string): Observable<void> {

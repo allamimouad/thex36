@@ -4,6 +4,8 @@ import { BehaviorSubject, Observable, combineLatest, forkJoin, map, of, switchMa
 import { SharepointExplorerClient } from './sharepoint-explorer.client';
 import { ExplorerRow, FolderNode } from './sharepoint-explorer.models';
 
+export const SHAREPOINT_EXPLORER_ROOT_URL = '/sites/XXX1/D1';
+
 @Injectable({ providedIn: 'root' })
 export class SharepointExplorerService {
   private readonly client = inject(SharepointExplorerClient);
@@ -11,16 +13,13 @@ export class SharepointExplorerService {
   private readonly foldersSubject = new BehaviorSubject<FolderNode[]>([]);
   private readonly refreshSubject = new BehaviorSubject(0);
   private readonly loadedParents = new Set<string | null>();
-  private readonly rootFolderUrls = new Set<string>();
 
   watchFolders(): Observable<FolderNode[]> {
     return this.foldersSubject.asObservable();
   }
 
   getRootFolders(): Observable<FolderNode[]> {
-    return this.watchFolders().pipe(
-      map((folders) => folders.filter((folder) => this.rootFolderUrls.has(folder.serverRelativeUrl))),
-    );
+    return this.getFoldersOf(SHAREPOINT_EXPLORER_ROOT_URL);
   }
 
   getFolderByServerRelativeUrl(folderUrl: string): Observable<FolderNode | null> {
@@ -52,22 +51,16 @@ export class SharepointExplorerService {
     );
   }
 
-  getFolderPath(folderUrl: string): Observable<FolderNode[]> {
-    return this.refreshSubject.pipe(switchMap(() => this.client.getFolderPath(folderUrl).pipe(take(1))));
-  }
-
   loadRootFolders(): Observable<FolderNode[]> {
-    if (this.loadedParents.has(null)) {
+    if (this.loadedParents.has(SHAREPOINT_EXPLORER_ROOT_URL)) {
       return this.getRootFolders().pipe(take(1));
     }
 
-    return this.client.getRootFolders().pipe(
+    return this.client.getFoldersOf(SHAREPOINT_EXPLORER_ROOT_URL).pipe(
       take(1),
-      tap((rootFolders) => {
-        this.loadedParents.add(null);
-        this.rootFolderUrls.clear();
-        rootFolders.forEach((folder) => this.rootFolderUrls.add(folder.serverRelativeUrl));
-        this.replaceChildren(null, rootFolders);
+      tap((folders) => {
+        this.loadedParents.add(SHAREPOINT_EXPLORER_ROOT_URL);
+        this.replaceChildren(SHAREPOINT_EXPLORER_ROOT_URL, folders);
       }),
     );
   }
@@ -119,13 +112,15 @@ export class SharepointExplorerService {
   private reloadAfterMove(sourceFolderUrl: string | null, destinationFolderUrl: string): Observable<void> {
     const reloads: Observable<unknown>[] = [];
 
-    if (sourceFolderUrl === null) {
+    if (sourceFolderUrl === SHAREPOINT_EXPLORER_ROOT_URL) {
       reloads.push(this.loadRootFoldersForce());
-    } else if (this.loadedParents.has(sourceFolderUrl)) {
+    } else if (sourceFolderUrl && this.loadedParents.has(sourceFolderUrl)) {
       reloads.push(this.loadFoldersOf(sourceFolderUrl, true));
     }
 
-    if (this.loadedParents.has(destinationFolderUrl)) {
+    if (destinationFolderUrl === SHAREPOINT_EXPLORER_ROOT_URL) {
+      reloads.push(this.loadRootFoldersForce());
+    } else if (this.loadedParents.has(destinationFolderUrl)) {
       reloads.push(this.loadFoldersOf(destinationFolderUrl, true));
     }
 
@@ -141,7 +136,7 @@ export class SharepointExplorerService {
   }
 
   private loadRootFoldersForce(): Observable<FolderNode[]> {
-    this.loadedParents.delete(null);
+    this.loadedParents.delete(SHAREPOINT_EXPLORER_ROOT_URL);
     return this.loadRootFolders();
   }
 
@@ -191,7 +186,6 @@ export class SharepointExplorerService {
 
     branchUrls.forEach((url) => {
       this.loadedParents.delete(url);
-      this.rootFolderUrls.delete(url);
     });
   }
 

@@ -13,7 +13,7 @@ import { TreeModule } from 'primeng/tree';
 import { TreeNode } from 'primeng/api';
 import { finalize, of, switchMap } from 'rxjs';
 import { ExplorerRow, FileItem, FolderNode } from './sharepoint-explorer.models';
-import { SharepointExplorerService } from './sharepoint-explorer.service';
+import { SHAREPOINT_EXPLORER_ROOT_URL, SharepointExplorerService } from './sharepoint-explorer.service';
 
 @Component({
   selector: 'app-sharepoint-explorer',
@@ -30,20 +30,10 @@ export class SharepointExplorerComponent {
   readonly allFolders = toSignal(this.explorerService.watchFolders(), { initialValue: [] as FolderNode[] });
   readonly rootFolders = toSignal(this.explorerService.getRootFolders(), { initialValue: [] as FolderNode[] });
   readonly rootFolder = computed<FolderNode | null>(() => {
-    const rootFolders = this.rootFolders();
-    if (rootFolders.length === 0) {
-      return null;
-    }
-
-    const rootFolderUrl = this.getParentFolderUrl(rootFolders[0].serverRelativeUrl);
-    if (!rootFolderUrl) {
-      return null;
-    }
-
     return {
       isFolder: true,
       name: '/',
-      serverRelativeUrl: rootFolderUrl,
+      serverRelativeUrl: SHAREPOINT_EXPLORER_ROOT_URL,
       level: 0,
     };
   });
@@ -84,25 +74,7 @@ export class SharepointExplorerComponent {
     ),
     { initialValue: [] as ExplorerRow[] },
   );
-  readonly breadcrumb = toSignal(
-    toObservable(this.selectedFolderUrl).pipe(
-      switchMap((folderUrl) => {
-        const rootFolder = this.rootFolder();
-        if (!folderUrl || !rootFolder) {
-          return of([] as FolderNode[]);
-        }
-
-        if (folderUrl === rootFolder.serverRelativeUrl) {
-          return of([rootFolder]);
-        }
-
-        return this.explorerService
-          .getFolderPath(folderUrl)
-          .pipe(switchMap((path) => of([rootFolder, ...path])));
-      }),
-    ),
-    { initialValue: [] as FolderNode[] },
-  );
+  readonly breadcrumb = computed(() => this.formatSelectedPath(this.selectedFolderUrl()));
   readonly selectedFolder = computed(
     () =>
       this.allFolders().find((folder) => folder.serverRelativeUrl === this.selectedFolderUrl()) ??
@@ -279,6 +251,23 @@ export class SharepointExplorerComponent {
 
   private buildDestinationUrl(parentFolderUrl: string, itemName: string): string {
     return `${parentFolderUrl}/${itemName}`;
+  }
+
+  private formatSelectedPath(folderUrl: string): string {
+    if (!folderUrl || folderUrl === SHAREPOINT_EXPLORER_ROOT_URL) {
+      return '/';
+    }
+
+    const relativePath = folderUrl.startsWith(SHAREPOINT_EXPLORER_ROOT_URL)
+      ? folderUrl.slice(SHAREPOINT_EXPLORER_ROOT_URL.length)
+      : folderUrl;
+
+    if (!relativePath || relativePath === '/') {
+      return '/';
+    }
+
+    const normalizedPath = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
+    return normalizedPath.replaceAll('/', ' / ');
   }
 
   private toTreeNode(

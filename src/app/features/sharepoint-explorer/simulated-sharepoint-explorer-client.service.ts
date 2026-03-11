@@ -7,62 +7,53 @@ import { FileItem, FolderNode } from './sharepoint-explorer.models';
 @Injectable({ providedIn: 'root' })
 export class SimulatedSharepointExplorerClientService implements SharepointExplorerClient {
   private readonly simulatedLatencyMs = 400;
-  private readonly explorerRootUrl = '/sites/thex36';
 
   private readonly foldersSubject = new BehaviorSubject<FolderNode[]>([
-    { isFolder: true, name: 'Root', serverRelativeUrl: '/sites/thex36' },
-    { isFolder: true, name: 'Documents', serverRelativeUrl: '/sites/thex36/Documents' },
-    { isFolder: true, name: 'Images', serverRelativeUrl: '/sites/thex36/Images' },
-    { isFolder: true, name: 'Projects', serverRelativeUrl: '/sites/thex36/Documents/Projects' },
-    { isFolder: true, name: 'Archive', serverRelativeUrl: '/sites/thex36/Documents/Archive' },
-    { isFolder: true, name: 'Mockups', serverRelativeUrl: '/sites/thex36/Images/Mockups' },
+    { isFolder: true, name: 'Root', serverRelativeUrl: '/sites/XXX1/D1' },
+    { isFolder: true, name: 'Documents', serverRelativeUrl: '/sites/XXX1/D1/Documents' },
+    { isFolder: true, name: 'Images', serverRelativeUrl: '/sites/XXX1/D1/Images' },
+    { isFolder: true, name: 'Projects', serverRelativeUrl: '/sites/XXX1/D1/Documents/Projects' },
+    { isFolder: true, name: 'Archive', serverRelativeUrl: '/sites/XXX1/D1/Documents/Archive' },
+    { isFolder: true, name: 'Mockups', serverRelativeUrl: '/sites/XXX1/D1/Images/Mockups' },
   ]);
 
   private readonly filesSubject = new BehaviorSubject<FileItem[]>([
     {
       isFolder: false,
       name: 'requirements.docx',
-      serverRelativeUrl: '/sites/thex36/Documents/requirements.docx',
+      serverRelativeUrl: '/sites/XXX1/D1/Documents/requirements.docx',
       size: 45682,
       modifiedAt: '2026-03-01',
     },
     {
       isFolder: false,
       name: 'q1-report.xlsx',
-      serverRelativeUrl: '/sites/thex36/Documents/q1-report.xlsx',
+      serverRelativeUrl: '/sites/XXX1/D1/Documents/q1-report.xlsx',
       size: 128812,
       modifiedAt: '2026-02-24',
     },
     {
       isFolder: false,
       name: 'hero-banner.png',
-      serverRelativeUrl: '/sites/thex36/Images/hero-banner.png',
+      serverRelativeUrl: '/sites/XXX1/D1/Images/hero-banner.png',
       size: 845321,
       modifiedAt: '2026-02-18',
     },
     {
       isFolder: false,
       name: 'mobile-wireframe.fig',
-      serverRelativeUrl: '/sites/thex36/Images/Mockups/mobile-wireframe.fig',
+      serverRelativeUrl: '/sites/XXX1/D1/Images/Mockups/mobile-wireframe.fig',
       size: 2251880,
       modifiedAt: '2026-03-04',
     },
     {
       isFolder: false,
       name: 'roadmap.md',
-      serverRelativeUrl: '/sites/thex36/Documents/Projects/roadmap.md',
+      serverRelativeUrl: '/sites/XXX1/D1/Documents/Projects/roadmap.md',
       size: 8120,
       modifiedAt: '2026-03-05',
     },
   ]);
-
-  getRootFolders(): Observable<FolderNode[]> {
-    return this.foldersSubject.pipe(
-      map((folders) =>
-        folders.filter((folder) => this.getParentFolderUrl(folder.serverRelativeUrl) === this.explorerRootUrl),
-      ),
-    );
-  }
 
   getFolderByServerRelativeUrl(folderUrl: string): Observable<FolderNode | null> {
     return this.foldersSubject.pipe(
@@ -81,25 +72,6 @@ export class SimulatedSharepointExplorerClientService implements SharepointExplo
   getFilesOf(folderUrl: string): Observable<FileItem[]> {
     return this.filesSubject.pipe(
       map((files) => files.filter((file) => this.getParentFolderUrl(file.serverRelativeUrl) === folderUrl)),
-    );
-  }
-
-  getFolderPath(folderUrl: string): Observable<FolderNode[]> {
-    return this.foldersSubject.pipe(
-      map((folders) => {
-        const path: FolderNode[] = [];
-        let current = folders.find((folder) => folder.serverRelativeUrl === folderUrl) ?? null;
-
-        while (current) {
-          path.unshift(current);
-          const parentFolderUrl = this.getParentFolderUrl(current.serverRelativeUrl);
-          current = parentFolderUrl
-            ? (folders.find((folder) => folder.serverRelativeUrl === parentFolderUrl) ?? null)
-            : null;
-        }
-
-        return path;
-      }),
     );
   }
 
