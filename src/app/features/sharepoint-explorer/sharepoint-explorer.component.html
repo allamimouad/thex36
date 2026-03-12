@@ -2,6 +2,9 @@
   <div class="toolbar">
     <span class="toolbar-label">Current path:</span>
     <span class="crumb">{{ breadcrumb() }}</span>
+    @if (nativeUploadSummary()) {
+      <span class="upload-summary">{{ nativeUploadSummary() }}</span>
+    }
     <span class="toolbar-spacer"></span>
     @if (isOperating()) {
       <span class="operation-status" aria-live="polite">
@@ -75,6 +78,10 @@
             cdkDrag
             [cdkDragData]="item.kind === 'folder' ? item.folder : item.file"
             [class.folder-table-row]="item.kind === 'folder'"
+            [class.native-upload-active]="item.kind === 'folder' && activeNativeUploadFolderUrl() === item.folder.serverRelativeUrl"
+            (dragover)="item.kind === 'folder' && onNativeUploadDragOver($event, item.folder.serverRelativeUrl)"
+            (dragleave)="item.kind === 'folder' && onNativeUploadDragLeave($event, item.folder.serverRelativeUrl)"
+            (drop)="item.kind === 'folder' && onNativeUploadDrop($event, item.folder)"
             (dblclick)="item.kind === 'folder' && onOpenFolder(item.folder.serverRelativeUrl)"
           >
             <td>
@@ -96,6 +103,16 @@
           </tr>
         </ng-template>
       </p-table>
+
+      @if (selectedFolder()) {
+        <div
+          class="current-folder-drop-zone"
+          [class.native-upload-active]="activeNativeUploadFolderUrl() === selectedFolder()!.serverRelativeUrl"
+          (dragover)="onNativeUploadDragOver($event, selectedFolder()!.serverRelativeUrl)"
+          (dragleave)="onNativeUploadDragLeave($event, selectedFolder()!.serverRelativeUrl)"
+          (drop)="onNativeUploadDrop($event, selectedFolder()!)"
+        ></div>
+      }
     </section>
   </div>
 </div>

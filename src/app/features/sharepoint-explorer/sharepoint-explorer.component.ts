@@ -42,7 +42,9 @@ export class SharepointExplorerComponent {
   });
   readonly selectedFolderUrl = signal<string>('');
   readonly activeDropFolderUrl = signal<string | null>(null);
+  readonly activeNativeUploadFolderUrl = signal<string | null>(null);
   readonly expandedFolderUrls = signal<Set<string>>(new Set<string>());
+  readonly nativeUploadSummary = signal<string | null>(null);
   readonly pendingOperations = signal(0);
   readonly isOperating = computed(() => this.pendingOperations() > 0);
 
@@ -115,6 +117,52 @@ export class SharepointExplorerComponent {
 
   onDropListExited(): void {
     this.activeDropFolderUrl.set(null);
+  }
+
+  onNativeUploadDragOver(event: DragEvent, targetFolderUrl: string): void {
+    if (!this.hasNativeFiles(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    this.activeNativeUploadFolderUrl.set(targetFolderUrl);
+
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy';
+    }
+  }
+
+  onNativeUploadDragLeave(event: DragEvent, targetFolderUrl: string): void {
+    if (!this.hasNativeFiles(event)) {
+      return;
+    }
+
+    const relatedTarget = event.relatedTarget;
+    if (relatedTarget instanceof Node && event.currentTarget instanceof Node && event.currentTarget.contains(relatedTarget)) {
+      return;
+    }
+
+    if (this.activeNativeUploadFolderUrl() === targetFolderUrl) {
+      this.activeNativeUploadFolderUrl.set(null);
+    }
+  }
+
+  onNativeUploadDrop(event: DragEvent, targetFolder: FolderNode): void {
+    if (!this.hasNativeFiles(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.activeNativeUploadFolderUrl.set(null);
+
+    const files = this.explorerService.extractUploadFiles(event);
+    if (files.length === 0) {
+      return;
+    }
+
+    this.explorerService.uploadFilesTo(targetFolder.serverRelativeUrl, files).subscribe();
+    this.nativeUploadSummary.set(this.explorerService.buildUploadSummary(targetFolder.serverRelativeUrl, files));
   }
 
   onTreeNodeExpand(event: { node: TreeNode<FolderNode> }): void {
@@ -271,6 +319,11 @@ export class SharepointExplorerComponent {
 
     const normalizedPath = relativePath.startsWith('/') ? relativePath : `/${relativePath}`;
     return normalizedPath.replaceAll('/', ' / ');
+  }
+
+  private hasNativeFiles(event: DragEvent): boolean {
+    const dataTransfer = event.dataTransfer;
+    return !!dataTransfer && Array.from(dataTransfer.types).includes('Files');
   }
 
   private toTreeNode(

@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, combineLatest, forkJoin, map, of, switchMap, take, tap } from 'rxjs';
 
 import { SharepointExplorerClient } from './sharepoint-explorer.client';
+import { SharepointExplorerUploadService } from './sharepoint-explorer-upload.service';
 import { ExplorerRow, FolderNode } from '../models/sharepoint-explorer.models';
 
 export const SHAREPOINT_EXPLORER_ROOT_URL = '/sites/XXX1/D1';
@@ -9,6 +10,7 @@ export const SHAREPOINT_EXPLORER_ROOT_URL = '/sites/XXX1/D1';
 @Injectable({ providedIn: 'root' })
 export class SharepointExplorerService {
   private readonly client = inject(SharepointExplorerClient);
+  private readonly uploadService = inject(SharepointExplorerUploadService);
 
   private readonly foldersSubject = new BehaviorSubject<FolderNode[]>([]);
   private readonly refreshSubject = new BehaviorSubject(0);
@@ -105,6 +107,20 @@ export class SharepointExplorerService {
     );
   }
 
+  uploadFilesTo(folderServerRelativeUrl: string, files: File[]): Observable<void> {
+    return this.uploadService.uploadFilesTo(folderServerRelativeUrl, files).pipe(
+      switchMap(() => this.refreshAfterUpload(folderServerRelativeUrl)),
+    );
+  }
+
+  extractUploadFiles(event: DragEvent): File[] {
+    return this.uploadService.extractFiles(event);
+  }
+
+  buildUploadSummary(folderServerRelativeUrl: string, files: File[]): string {
+    return this.uploadService.buildUploadSummary(folderServerRelativeUrl, files);
+  }
+
   isFolderLoaded(folderUrl: string | null): boolean {
     return this.loadedParents.has(folderUrl);
   }
@@ -122,6 +138,26 @@ export class SharepointExplorerService {
       reloads.push(this.loadRootFoldersForce());
     } else if (this.loadedParents.has(destinationFolderUrl)) {
       reloads.push(this.loadFoldersOf(destinationFolderUrl, true));
+    }
+
+    if (reloads.length === 0) {
+      this.refreshSubject.next(this.refreshSubject.value + 1);
+      return of(void 0);
+    }
+
+    return forkJoin(reloads).pipe(
+      tap(() => this.refreshSubject.next(this.refreshSubject.value + 1)),
+      map(() => void 0),
+    );
+  }
+
+  private refreshAfterUpload(folderServerRelativeUrl: string): Observable<void> {
+    const reloads: Observable<unknown>[] = [];
+
+    if (folderServerRelativeUrl === SHAREPOINT_EXPLORER_ROOT_URL) {
+      reloads.push(this.loadRootFoldersForce());
+    } else if (this.loadedParents.has(folderServerRelativeUrl)) {
+      reloads.push(this.loadFoldersOf(folderServerRelativeUrl, true));
     }
 
     if (reloads.length === 0) {
