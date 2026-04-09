@@ -34,7 +34,11 @@
               [cdkDragData]="node.data"
               [class.selected]="selectedFolderUrl() === node.data.serverRelativeUrl"
               [class.drop-active]="activeDropFolderUrl() === node.data.serverRelativeUrl"
+              [class.native-upload-active]="activeNativeUploadFolderUrl() === node.data.serverRelativeUrl"
               (click)="onFolderSelect(node.data.serverRelativeUrl)"
+              (dragover)="onNativeUploadDragOver($event, node.data.serverRelativeUrl)"
+              (dragleave)="onNativeUploadDragLeave($event, node.data.serverRelativeUrl)"
+              (drop)="onNativeUploadDrop($event, node.data)"
             >
               <span class="folder-icon" aria-hidden="true">📁</span>
               <span class="folder-label">{{ node.label }}</span>

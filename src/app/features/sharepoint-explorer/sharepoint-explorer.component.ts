@@ -125,6 +125,7 @@ export class SharepointExplorerComponent {
     }
 
     event.preventDefault();
+    event.stopPropagation();
     this.activeNativeUploadFolderUrl.set(targetFolderUrl);
 
     if (event.dataTransfer) {
