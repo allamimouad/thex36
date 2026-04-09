@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Observable, of } from 'rxjs';
+import { delay, Observable, of } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
 export class SharepointExplorerUploadService {
@@ -18,7 +18,7 @@ export class SharepointExplorerUploadService {
       fileNames: files.map((file) => file.name),
     });
 
-    return of(void 0);
+    return of(void 0).pipe(delay(1500));
   }
 
   buildUploadSummary(folderServerRelativeUrl: string, files: File[]): string {

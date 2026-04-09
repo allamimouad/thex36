@@ -162,7 +162,11 @@ export class SharepointExplorerComponent {
       return;
     }
 
-    this.explorerService.uploadFilesTo(targetFolder.serverRelativeUrl, files).subscribe();
+    this.pendingOperations.update((count) => count + 1);
+    this.explorerService
+      .uploadFilesTo(targetFolder.serverRelativeUrl, files)
+      .pipe(finalize(() => this.pendingOperations.update((count) => Math.max(0, count - 1))))
+      .subscribe();
     this.nativeUploadSummary.set(this.explorerService.buildUploadSummary(targetFolder.serverRelativeUrl, files));
   }
 
