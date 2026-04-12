@@ -3,7 +3,7 @@ import { BehaviorSubject, Observable, combineLatest, forkJoin, map, of, switchMa
 
 import { SharepointExplorerClient } from './sharepoint-explorer.client';
 import { SharepointExplorerUploadService } from './sharepoint-explorer-upload.service';
-import { ExplorerRow, FolderNode } from '../models/sharepoint-explorer.models';
+import { ExplorerRow, FolderNode, UploadEntry } from '../models/sharepoint-explorer.models';
 
 export const SHAREPOINT_EXPLORER_ROOT_URL = '/sites/XXX1/D1';
 
@@ -107,18 +107,18 @@ export class SharepointExplorerService {
     );
   }
 
-  uploadFilesTo(folderServerRelativeUrl: string, files: File[]): Observable<void> {
-    return this.uploadService.uploadFilesTo(folderServerRelativeUrl, files).pipe(
+  uploadFilesTo(folderServerRelativeUrl: string, entries: UploadEntry[]): Observable<void> {
+    return this.uploadService.uploadFilesTo(folderServerRelativeUrl, entries).pipe(
       switchMap(() => this.refreshAfterUpload(folderServerRelativeUrl)),
     );
   }
 
-  extractUploadFiles(event: DragEvent): File[] {
+  extractUploadFiles(event: DragEvent): Promise<UploadEntry[]> {
     return this.uploadService.extractFiles(event);
   }
 
-  buildUploadSummary(folderServerRelativeUrl: string, files: File[]): string {
-    return this.uploadService.buildUploadSummary(folderServerRelativeUrl, files);
+  buildUploadSummary(folderServerRelativeUrl: string, entries: UploadEntry[]): string {
+    return this.uploadService.buildUploadSummary(folderServerRelativeUrl, entries);
   }
 
   isFolderLoaded(folderUrl: string | null): boolean {

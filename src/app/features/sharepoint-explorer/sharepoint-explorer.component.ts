@@ -148,7 +148,7 @@ export class SharepointExplorerComponent {
     }
   }
 
-  onNativeUploadDrop(event: DragEvent, targetFolder: FolderNode): void {
+  async onNativeUploadDrop(event: DragEvent, targetFolder: FolderNode): Promise<void> {
     if (!this.hasNativeFiles(event)) {
       return;
     }
@@ -157,7 +157,7 @@ export class SharepointExplorerComponent {
     event.stopPropagation();
     this.activeNativeUploadFolderUrl.set(null);
 
-    const files = this.explorerService.extractUploadFiles(event);
+    const files = await this.explorerService.extractUploadFiles(event);
     if (files.length === 0) {
       return;
     }
